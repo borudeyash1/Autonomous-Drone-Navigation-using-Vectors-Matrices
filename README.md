@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# Autonomous-Drone-Navigation-using-Vectors-Matrices
-.
-=======
 # Autonomous Multi-Drone Navigation System
 
 An advanced, interactive, and beginner-friendly drone navigation system using Python, PyBullet, and computer vision for multi-drone simulation, dynamic obstacle avoidance, and real-time path planning.
@@ -10,7 +6,7 @@ An advanced, interactive, and beginner-friendly drone navigation system using Py
 
 ## Features
 
-- **Multi-Drone Support:** Simulate and control multiple drones simultaneously, each with a unique color, independent path, and controller. Easily scale up the number of drones for swarm or fleet scenarios.
+- **Multi-Drone Support:** Simulate and control multiple drones simultaneously, each with a unique color, independent path, and controller.
 - **Dynamic Obstacles & No-Fly Zones:** Add obstacles and no-fly zones that move or animate in real time. Drones automatically replan their paths to avoid collisions and restricted areas.
 - **Realistic Physics:** Accurate quadrotor dynamics and propeller visuals using PyBullet.
 - **Interactive 2D Map:** Drag-and-drop UI for setting start/end points, static and dynamic obstacles, and no-fly zones. Edit the path in real time.
@@ -25,30 +21,60 @@ An advanced, interactive, and beginner-friendly drone navigation system using Py
 
 ---
 
-## Example Images
+## Table of Contents
 
-> **Note:** Replace the image links below with your own screenshots or GIFs for best results.
-
-| 2D Map Setup | 3D Simulation (Multi-Drone) | Dynamic Obstacles & No-Fly Zones |
-|:------------:|:--------------------------:|:-------------------------------:|
-| ![2D Map Example](docs/example_map.png) | ![3D Multi-Drone](docs/example_3d.png) | ![Dynamic Obstacles](docs/example_dynamic.png) |
+- [Features](#features)
+- [Quick Start Guide](#quick-start-guide)
+- [2D Map Controls](#2d-map-controls)
+- [3D Simulation Controls](#3d-simulation-controls)
+- [Manual Mode](#manual-mode)
+- [Project Architecture](#project-architecture)
+- [Customization & Extensibility](#customization--extensibility)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+- [License](#license)
 
 ---
 
 ## Quick Start Guide
 
-### 1. **Run the Simulation**
-- Open a terminal in your project root.
-- Run:
-  ```bash
-  python src/main.py
-  ```
-- For 3D camera controls, run:
+### 1. **Clone the Repository**
+
+```bash
+git clone <your-repo-url>
+cd <your-repo-directory>
+```
+
+### 2. **Install Dependencies**
+
+It is recommended to use a virtual environment:
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+**Main dependencies:**
+- numpy
+- opencv-python
+- pybullet
+
+### 3. **Run the Simulation**
+
+```bash
+python src/main.py
+```
+
+- For 3D camera controls (rotate, pan, zoom), run:
   ```bash
   python src/main.py --gui
   ```
 
-### 2. **Set Up the Map (Interactive 2D UI)**
+---
+
+## 2D Map Controls
+
 - **Left-click:** Set the start point (green)
 - **Right-click:** Add dynamic obstacle (blue)
 - **Middle-click:** Add static obstacle (black)
@@ -59,18 +85,15 @@ An advanced, interactive, and beginner-friendly drone navigation system using Py
 - **Right-click on a cell:** Set the end point (red)
 - **Press Enter:** Confirm setup and start simulation
 
-### 3. **Multi-Drone Usage**
-- The number of drones is set in `main.py` (see the `num_drones` parameter in the `Simulator` initialization).
-- Each drone is assigned a unique color and independent path.
-- Paths are planned and set for each drone at startup.
-- All drones are visualized in both 2D and 3D views.
+---
 
-### 4. **Simulation Controls**
+## 3D Simulation Controls
+
 - **Switch Mode:** Press `m` to toggle between Autonomous and Manual control for all drones.
 - **Manual Control:** Use on-screen sliders to adjust thrust, roll, pitch, and yaw for all drones.
 - **Quit:** Press `q` to exit simulation.
 
-### 5. **3D Camera Controls (GUI Mode)**
+### 3D Camera Controls (GUI Mode)
 - **Rotate:** Left mouse drag
 - **Pan:** Right mouse drag
 - **Zoom:** Mouse wheel
@@ -78,22 +101,15 @@ An advanced, interactive, and beginner-friendly drone navigation system using Py
 
 ---
 
-## Multi-Drone & Advanced Features
+## Manual Mode
 
-- **Multiple Drones:**
-  - Easily configure the number of drones in `main.py` or via the `Simulator` class.
-  - Each drone is managed by the `DroneFleet` class, with its own controller and path.
-  - Drones can be added or removed at runtime (see `DroneFleet.add_drone` and `remove_drone`).
-- **Dynamic Obstacles & No-Fly Zones:**
-  - Obstacles and zones can move with user-defined velocity vectors.
-  - Drones detect and avoid these in real time, triggering path replanning if blocked.
-  - No-fly zones are visualized in red; dynamic obstacles in blue.
-- **Mission Logging:**
-  - All drone movements are logged with simulated GPS coordinates and actions.
-  - Logs can be extended for export or replay.
-- **Extensible & Modular:**
-  - Add new drone behaviors, mission scripts, or swarm logic by extending `DroneFleet`, `Controller`, or `PathPlanner`.
-  - Easily integrate new sensors, planners, or UI features.
+- When you press `m`, you enter Manual mode.
+- Use the sliders in the "Parameters" window to control:
+  - **Thrust:** Up/down movement
+  - **Roll:** Left/right tilt
+  - **Pitch:** Forward/backward tilt
+  - **Yaw:** Rotation
+- The terminal will print which mode you are in and instructions for manual control.
 
 ---
 
@@ -115,68 +131,59 @@ autonomous-drone-navigation/
 │   ├── ui/
 │   │   └── map_ui.py          # Interactive 2D map UI, obstacle editing, path visualization
 │   └── main.py                # Main entry point, scenario setup, mission logic
-├── models/                    # Model files
-├── data/                      # Data storage
-├── tests/                     # Test files
-├── docs/                      # Documentation
-├── requirements.txt           # Dependencies
-└── setup.py                   # Setup script
-```
-
-### Module Descriptions
-- **control/controller.py:** Implements a PID controller for each drone, computing thrust and torques to reach target positions.
-- **perception/obstacle_detector.py:** (Optional) For advanced perception or vision-based obstacle detection.
-- **planning/path_planner.py:** Handles A* pathfinding, grid/world coordinate conversion, and manages static/dynamic obstacles and no-fly zones.
-- **simulation/simulator.py:** Orchestrates the PyBullet simulation, 3D rendering, camera controls, and status display for all drones.
-- **simulation/quadrotor.py:** Defines the drone's physical model, propeller visuals, and applies control inputs.
-- **simulation/drone_fleet.py:** Manages all drones in the simulation, including their states, paths, and controllers. Supports adding/removing drones at runtime.
-- **ui/map_ui.py:** Provides the interactive 2D map for user setup, obstacle editing, and real-time path visualization.
-- **main.py:** Entry point for the simulation. Sets up the scenario, initializes drones, plans paths, and manages the main loop.
-
----
-
-## API Usage Examples
-
-Here are some code snippets to help you extend or automate the system:
-
-### Add a Drone at Runtime
-```python
-from simulation.simulator import Simulator
-sim = Simulator(num_drones=2)
-# Add a new drone at a specific position
-new_idx = sim.fleet.add_drone(position=np.array([2, 2, 1]))
-```
-
-### Set a Path for a Drone
-```python
-# Set a new path for drone 0
-sim.fleet.set_drone_path(0, [np.array([0,0,1]), np.array([5,5,1])])
-```
-
-### Remove a Drone
-```python
-sim.fleet.remove_drone(1)  # Remove the second drone
-```
-
-### Access Drone States
-```python
-states = sim.fleet.get_drone_states()
-for i, state in enumerate(states):
-    print(f"Drone {i} position: {state['position']}")
-```
-
-### Custom Path Planning
-```python
-from planning.path_planner import PathPlanner
-planner = PathPlanner()
-start = np.array([-5, -5, 1])
-end = np.array([5, 5, 1])
-path = planner.plan_path(start, end)
+├── models/                    # Model files (ignored by git)
+├── data/                      # Data storage (ignored by git)
+├── requirements.txt           # Python dependencies
+├── README.md                  # This file
+├── .gitignore                 # Git ignore rules
 ```
 
 ---
 
-## Advanced Configuration
+## File & Module Descriptions
+
+### src/main.py
+- **Entry point for the simulation.** Handles the overall workflow: launches the 2D map UI, collects user input, initializes the simulation, plans paths, and manages the main simulation loop.
+
+### src/ui/map_ui.py
+- **Interactive 2D map interface.** Lets users set start/end points, add and edit obstacles, dynamic obstacles, and no-fly zones. Handles all mouse interactions and draws the grid, obstacles, and instructions overlay.
+
+### src/simulation/simulator.py
+- **Core 3D simulation engine.** Manages the PyBullet environment, loads the ground plane, obstacles, and drones, and handles the 3D camera view. Provides methods for stepping the simulation, rendering, and updating the status display.
+
+### src/simulation/drone_fleet.py
+- **Manages multiple drones.** Keeps track of all drones, their controllers, and their assigned paths. Steps each drone in the simulation and provides access to their states.
+
+### src/simulation/quadrotor.py
+- **Defines the drone model.** Handles the physical properties, propeller visuals, and application of control inputs (thrust, roll, pitch, yaw) to the drone in the PyBullet world.
+
+### src/control/controller.py
+- **PID controller logic.** Computes the control inputs (thrust and torques) needed for a drone to reach a target position and velocity, using PID control.
+
+### src/planning/path_planner.py
+- **Path planning and grid/world conversion.** Implements the A* algorithm for pathfinding, manages the grid representation, and converts between grid and world coordinates. Handles obstacle and no-fly zone integration into planning.
+
+### src/perception/obstacle_detector.py
+- **(Optional) Obstacle detection.** Provides computer vision utilities for detecting obstacles from camera images, useful for advanced perception or research extensions.
+
+### models/
+- **Drone and environment model files.** Place your custom URDF/SDF models here. This folder is ignored by git.
+
+### data/
+- **Data storage.** For logs, mission data, or other outputs. This folder is ignored by git.
+
+### requirements.txt
+- **Python dependencies.** List of required packages for the project.
+
+### .gitignore
+- **Git ignore rules.** Prevents unnecessary or large files from being tracked by git.
+
+### README.md
+- **Project documentation.** This file.
+
+---
+
+## Customization & Extensibility
 
 - **Number of Drones:**
   - Set `num_drones` in `main.py` or pass as an argument to `Simulator`.
@@ -195,47 +202,38 @@ path = planner.plan_path(start, end)
 
 ---
 
-## Customization & Extensibility
-- **Add More Drones:** Change `num_drones` in `main.py` or via `Simulator`.
-- **Custom Drone Colors:** Edit the color palette in `drone_fleet.py` for unique drone appearances.
-- **Advanced Path Planning:** Extend `PathPlanner` for multi-objective, time-dependent, or swarm planning.
-- **Mission Scripting:** Add mission logic in `main.py` or create new modules for complex tasks.
-- **UI/UX:** Tweak the 2D map or 3D UI in `map_ui.py` and `simulator.py` for custom controls or visuals.
-- **Logging/Export:** Extend logging in `main.py` for CSV/JSON export, or implement replay features.
-- **Sensors/Perception:** Integrate new sensors or vision modules in `perception/` for advanced autonomy.
+## Troubleshooting
+
+- **Black 3D Camera View:**
+  - Ensure the camera is positioned above and behind the drone, looking at the scene (see `_get_camera_images` in `simulator.py`).
+- **2D Map Not Visible:**
+  - Make sure `map_ui.draw()` is called in the simulation loop and `map_ui.close()` is only called at the end.
+- **Manual Controls Not Working:**
+  - Press `m` to switch to Manual mode. Use the sliders in the "Parameters" window.
+- **Simulation Crashes or Lags:**
+  - Try reducing the number of drones or obstacles. Ensure your system meets the requirements.
 
 ---
 
 ## FAQ
 
 **Q: Can I use this as a beginner?**
-- Absolutely! The UI and code are designed for accessibility. Follow the in-map tutorial and this guide.
+A: Yes! The UI is designed to be intuitive, and the code is modular and well-commented.
 
 **Q: How do I add more drones?**
-- Change the `num_drones` parameter in `main.py` or `Simulator`. Each drone will get its own color and path.
+A: Change the `num_drones` parameter in `main.py` when creating the `Simulator`.
 
-**Q: Can I add or remove drones during simulation?**
-- Yes! Use `DroneFleet.add_drone()` or `remove_drone()` in your code to manage the fleet dynamically.
+**Q: How do I add new obstacle types or behaviors?**
+A: Extend the `add_obstacle` method in `simulator.py` and update the 2D map UI as needed.
 
-**Q: How do dynamic obstacles and no-fly zones work?**
-- Add them in the 2D map. They move according to their velocity, and drones will replan paths in real time to avoid them.
+**Q: Can I use my own drone models?**
+A: Yes, place your URDF/SDF models in the `models/` directory and update the loading logic in `simulator.py`.
 
-**Q: Can I assign different missions or paths to each drone?**
-- Yes! Each drone can have its own start/end and path. Extend `main.py` or `DroneFleet` for more complex missions.
-
-**Q: How do I extend the system for research or teaching?**
-- The code is modular and well-commented. Add new modules, planners, or UI features as needed.
-
-**Q: Can I save and load missions or logs?**
-- Export/import features are planned. For now, all actions are logged and can be extended for export or replay.
+**Q: How do I contribute?**
+A: Fork the repo, make your changes, and submit a pull request! See the [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines (if available).
 
 ---
 
 ## License
-MIT License
 
-## Contact
-For questions or support, please contact:
-- Email: [your-email@example.com]
-- GitHub: [your-github-profile] 
->>>>>>> 965084a (asdfsdf)
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details. 
