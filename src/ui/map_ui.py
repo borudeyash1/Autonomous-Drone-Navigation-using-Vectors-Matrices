@@ -26,6 +26,8 @@ class MapUI:
         self.nofly_zone_states = {}     # (gx,gy): {'timer': int, 'active': bool, 'period': int}
         self.drone_paths = {}  # drone_id: list of (gx, gy)
         self.locked = False
+        self.path_points = []  # Store path points
+        self.drone_positions = {}  # Store drone positions
         cv2.namedWindow(self.window_name)
         cv2.setMouseCallback(self.window_name, self._mouse_event)
 
@@ -264,4 +266,42 @@ class MapUI:
     def update_drone_path(self, drone_id, gx, gy):
         if drone_id not in self.drone_paths:
             self.drone_paths[drone_id] = []
-        self.drone_paths[drone_id].append((gx, gy)) 
+        self.drone_paths[drone_id].append((gx, gy))
+        self.drone_positions[drone_id] = (gx, gy)
+
+    def clear_path(self):
+        """Clear all path points."""
+        self.path_points = []
+
+    def add_path_point(self, x, y):
+        """Add a point to the path."""
+        self.path_points.append((x, y))
+
+    def draw_path(self):
+        """Draw the current path."""
+        img = np.ones((self.grid_size * self.cell_size, self.grid_size * self.cell_size, 3), dtype=np.uint8) * 255
+        for (gx, gy) in self.path_points:
+            cv2.rectangle(img, (gx*self.cell_size, gy*self.cell_size), ((gx+1)*self.cell_size, (gy+1)*self.cell_size), (0,255,255), -1)
+        cv2.imshow(self.window_name, img)
+
+    def draw_drone_paths(self):
+        """Draw all drone paths."""
+        img = np.ones((self.grid_size * self.cell_size, self.grid_size * self.cell_size, 3), dtype=np.uint8) * 255
+        for drone_id, path in self.drone_paths.items():
+            if len(path) > 1:
+                for i in range(1, len(path)):
+                    x1, y1 = path[i-1]
+                    x2, y2 = path[i]
+                    color = (0, 0, 255 - 50*drone_id)  # Different color for each drone
+                    cv2.line(img,
+                        (x1*self.cell_size+self.cell_size//2, y1*self.cell_size+self.cell_size//2),
+                        (x2*self.cell_size+self.cell_size//2, y2*self.cell_size+self.cell_size//2),
+                        color, 2)
+        cv2.imshow(self.window_name, img)
+
+    def draw_drone_positions(self):
+        """Draw all drone positions."""
+        img = np.ones((self.grid_size * self.cell_size, self.grid_size * self.cell_size, 3), dtype=np.uint8) * 255
+        for drone_id, (gx, gy) in self.drone_positions.items():
+            cv2.circle(img, (gx*self.cell_size+self.cell_size//2, gy*self.cell_size+self.cell_size//2), self.cell_size//4, (255,0,255), -1)
+        cv2.imshow(self.window_name, img) 

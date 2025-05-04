@@ -516,7 +516,7 @@ class Simulator:
         self._goal_marker_id = p.createMultiBody(
             baseMass=0,
             baseCollisionShapeIndex=p.createCollisionShape(p.GEOM_SPHERE, radius=0.18),
-            baseVisualShapeIndex=p.createVisualShape(p.GEOM_SPHERE, radius=0.18, rgbaColor=[0,1,0,1]),
+            baseVisualShapeIndex=p.createVisualShape(p.GEOM_SPHERE, radius=0.18, rgbaColor=[1,0,0,1]),
             basePosition=pos3d
         )
 

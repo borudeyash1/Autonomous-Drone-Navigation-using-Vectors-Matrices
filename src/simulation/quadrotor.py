@@ -72,13 +72,39 @@ class Quadrotor:
         """
         # Convert control input to forces and torques
         thrust = control_input[0]
-        roll_torque = control_input[1]
-        pitch_torque = control_input[2]
-        yaw_torque = control_input[3]
-        
+        roll = control_input[1]
+        pitch = control_input[2]
+        yaw = control_input[3]
+
+        # Get current orientation
+        _, orn = p.getBasePositionAndOrientation(self.body_id)
+        rot_matrix = np.array(p.getMatrixFromQuaternion(orn)).reshape(3, 3)
+
+        # Calculate forces in body frame
+        # Forward/backward force based on pitch
+        fx = thrust * np.sin(pitch)
+        # Left/right force based on roll
+        fy = -thrust * np.sin(roll)
+        # Upward force (thrust)
+        fz = thrust * np.cos(roll) * np.cos(pitch)
+
+        # Convert forces to world frame
+        force_world = rot_matrix @ np.array([fx, fy, fz])
+
+        # Calculate torques in body frame
+        # Roll torque (around x-axis)
+        tx = roll * 2.0
+        # Pitch torque (around y-axis)
+        ty = pitch * 2.0
+        # Yaw torque (around z-axis)
+        tz = yaw * 1.0
+
+        # Convert torques to world frame
+        torque_world = rot_matrix @ np.array([tx, ty, tz])
+
         # Apply forces and torques
-        p.applyExternalForce(self.body_id, -1, [0, 0, thrust], [0, 0, 0], p.WORLD_FRAME)
-        p.applyExternalTorque(self.body_id, -1, [roll_torque, pitch_torque, yaw_torque], p.WORLD_FRAME)
+        p.applyExternalForce(self.body_id, -1, force_world, [0, 0, 0], p.WORLD_FRAME)
+        p.applyExternalTorque(self.body_id, -1, torque_world, p.WORLD_FRAME)
     
     def get_state(self) -> Dict:
         """Get the current state of the quadrotor."""

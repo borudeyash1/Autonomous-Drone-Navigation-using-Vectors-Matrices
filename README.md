@@ -21,9 +21,28 @@ An advanced, interactive, and beginner-friendly drone navigation system using Py
 
 ---
 
+## Recent Updates
+
+### Drone Control System Improvements
+- Enhanced quadrotor physics with proper body-frame force application
+- Improved control input calculation with better position error handling
+- Increased control gains and thrust for more responsive movement
+- Added proper force and torque application in world frame
+- Implemented better stuck detection and recovery mechanisms
+
+### Key Parameters
+- Control gain (k): 2.0 for responsive movement
+- Thrust: 15.0 N for better lift
+- Roll/Pitch limits: ±1.0 radians
+- Stuck detection threshold: 2.0 seconds
+- Stuck distance threshold: 1.0 meters
+
+---
+
 ## Table of Contents
 
 - [Features](#features)
+- [Recent Updates](#recent-updates)
 - [Quick Start Guide](#quick-start-guide)
 - [2D Map Controls](#2d-map-controls)
 - [3D Simulation Controls](#3d-simulation-controls)
@@ -105,10 +124,10 @@ python src/main.py
 
 - When you press `m`, you enter Manual mode.
 - Use the sliders in the "Parameters" window to control:
-  - **Thrust:** Up/down movement
-  - **Roll:** Left/right tilt
-  - **Pitch:** Forward/backward tilt
-  - **Yaw:** Rotation
+  - **Thrust:** Up/down movement (0-20 N)
+  - **Roll:** Left/right tilt (-0.5 to 0.5 rad)
+  - **Pitch:** Forward/backward tilt (-0.5 to 0.5 rad)
+  - **Yaw:** Rotation (-0.5 to 0.5 rad)
 - The terminal will print which mode you are in and instructions for manual control.
 
 ---
@@ -203,6 +222,12 @@ autonomous-drone-navigation/
 ---
 
 ## Troubleshooting
+
+- **Drone Not Moving:**
+  - Check if the drone is properly initialized with correct mass and inertia
+  - Verify control inputs are being applied correctly
+  - Ensure the path planning is generating valid paths
+  - Check for any collision issues with obstacles
 
 - **Black 3D Camera View:**
   - Ensure the camera is positioned above and behind the drone, looking at the scene (see `_get_camera_images` in `simulator.py`).
