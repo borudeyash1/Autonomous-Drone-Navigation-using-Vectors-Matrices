@@ -1,15 +1,15 @@
 import numpy as np
 from typing import Dict
+import time
 
 class Controller:
-    def __init__(self, kp: float = 1.0, ki: float = 0.1, kd: float = 0.5):
+    def __init__(self, kp: float = 5.0, ki: float = 0.2, kd: float = 2.0):
         """
-        Initialize the PID controller.
-        
+        Initialize the PID controller with more aggressive gains.
         Args:
-            kp: Proportional gain
-            ki: Integral gain
-            kd: Derivative gain
+            kp: Proportional gain (increased from 2.0)
+            ki: Integral gain (increased from 0.1)
+            kd: Derivative gain (increased from 1.0)
         """
         self.kp = kp
         self.ki = ki
@@ -18,6 +18,8 @@ class Controller:
         # Initialize error terms
         self.prev_error = np.zeros(3)
         self.integral = np.zeros(3)
+        self.last_error = np.zeros(3)
+        self.last_time = time.time()
         
         # Control limits
         self.max_thrust = 20.0  # N
@@ -70,4 +72,6 @@ class Controller:
     def reset(self):
         """Reset the controller state."""
         self.prev_error = np.zeros(3)
-        self.integral = np.zeros(3) 
+        self.integral = np.zeros(3)
+        self.last_error = np.zeros(3)
+        self.last_time = time.time() 

@@ -24,6 +24,8 @@ class MapUI:
         self.dynamic_obstacle_states = {}  # (gx,gy): {'dir': (dx,dy), 'speed': float}
         self.nofly_zones = set()        # (gx,gy) for no-fly zones
         self.nofly_zone_states = {}     # (gx,gy): {'timer': int, 'active': bool, 'period': int}
+        self.drone_paths = {}  # drone_id: list of (gx, gy)
+        self.locked = False
         cv2.namedWindow(self.window_name)
         cv2.setMouseCallback(self.window_name, self._mouse_event)
 
@@ -45,6 +47,8 @@ class MapUI:
     def _mouse_event(self, event, x, y, flags, param):
         gx, gy = x // self.cell_size, y // self.cell_size
         if gx >= self.grid_size or gy >= self.grid_size:
+            return
+        if self.locked:
             return
         # End point: Ctrl+Right-click
         if event == cv2.EVENT_RBUTTONDOWN and (flags & cv2.EVENT_FLAG_CTRLKEY):
@@ -147,6 +151,17 @@ class MapUI:
         # Draw drone
         if self.drone_pos:
             cv2.circle(img, (self.drone_pos[0]*self.cell_size+self.cell_size//2, self.drone_pos[1]*self.cell_size+self.cell_size//2), self.cell_size//3, (255,0,0), -1)
+        # Draw drone paths (history)
+        for drone_id, path in self.drone_paths.items():
+            if len(path) > 1:
+                for i in range(1, len(path)):
+                    x1, y1 = path[i-1]
+                    x2, y2 = path[i]
+                    color = (0, 0, 255 - 50*drone_id)  # Different color for each drone
+                    cv2.line(img,
+                        (x1*self.cell_size+self.cell_size//2, y1*self.cell_size+self.cell_size//2),
+                        (x2*self.cell_size+self.cell_size//2, y2*self.cell_size+self.cell_size//2),
+                        color, 2)
         # Draw grid
         for i in range(self.grid_size+1):
             cv2.line(img, (0, i*self.cell_size), (self.grid_size*self.cell_size, i*self.cell_size), (200,200,200), 1)
@@ -190,7 +205,9 @@ class MapUI:
                 if self.start and self.end:
                     break
         print(f"[Map UI] Start: {self.start}, End: {self.end}, Obstacles: {len(self.obstacles)}")
-        return self.get_map()
+        result = self.get_map()
+        self.locked = True  # Lock editing after setup
+        return result
 
     def close(self):
         cv2.destroyWindow(self.window_name)
@@ -242,4 +259,9 @@ class MapUI:
                 new_nofly_zones.add((gx, gy))
             new_nofly_states[(gx, gy)] = {'timer': timer, 'active': active, 'period': period}
         self.nofly_zones = new_nofly_zones
-        self.nofly_zone_states = new_nofly_states 
+        self.nofly_zone_states = new_nofly_states
+
+    def update_drone_path(self, drone_id, gx, gy):
+        if drone_id not in self.drone_paths:
+            self.drone_paths[drone_id] = []
+        self.drone_paths[drone_id].append((gx, gy)) 

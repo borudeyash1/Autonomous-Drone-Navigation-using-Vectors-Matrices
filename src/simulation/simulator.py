@@ -89,9 +89,9 @@ class Simulator:
         self.obstacle_ids = []
         
         # Create OpenCV windows
-        cv2.namedWindow('Drone Camera View', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('Drone Camera View', self.camera_width, self.camera_height)
-        cv2.setMouseCallback('Drone Camera View', self._mouse_event)
+        cv2.namedWindow('FPP View', cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('FPP View', self.camera_width, self.camera_height)
+        cv2.setMouseCallback('FPP View', self._mouse_event)
         cv2.namedWindow('Drone Status', cv2.WINDOW_NORMAL)
         cv2.resizeWindow('Drone Status', 400, 300)
         
@@ -109,22 +109,116 @@ class Simulator:
             textColorRGB=[1, 1, 1],
             textSize=1.5
         )
+        
+        self.fpp_mode = True  # True: FPP, False: Free View
+        self.free_cam_pos = np.array([0.0, -5.0, 2.0])
+        self.free_cam_yaw = 0.0
+        self.free_cam_pitch = -10.0
+        self._free_mouse_down = False
+        self._last_free_mouse_x = 0
+        self._last_free_mouse_y = 0
     
     def _mouse_event(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            self._mouse_down = True
-            self._last_mouse_x = x
-            self._last_mouse_y = y
-        elif event == cv2.EVENT_LBUTTONUP:
-            self._mouse_down = False
-        elif event == cv2.EVENT_MOUSEMOVE and self._mouse_down:
-            dx = x - self._last_mouse_x
-            dy = y - self._last_mouse_y
-            self._last_mouse_x = x
-            self._last_mouse_y = y
-            self.camera_yaw += dx * 0.3  # Sensitivity
-            self.camera_pitch += dy * 0.3
-            self.camera_pitch = np.clip(self.camera_pitch, -89, 89)
+        if self.fpp_mode:
+            if event == cv2.EVENT_LBUTTONDOWN:
+                self._mouse_down = True
+                self._last_mouse_x = x
+                self._last_mouse_y = y
+            elif event == cv2.EVENT_LBUTTONUP:
+                self._mouse_down = False
+            elif event == cv2.EVENT_MOUSEMOVE and self._mouse_down:
+                dx = x - self._last_mouse_x
+                dy = y - self._last_mouse_y
+                self._last_mouse_x = x
+                self._last_mouse_y = y
+                self.camera_yaw += dx * 0.3  # Sensitivity
+                self.camera_pitch += dy * 0.3
+                self.camera_pitch = np.clip(self.camera_pitch, -89, 89)
+        else:
+            if event == cv2.EVENT_RBUTTONDOWN:
+                self._free_mouse_down = True
+                self._last_free_mouse_x = x
+                self._last_free_mouse_y = y
+            elif event == cv2.EVENT_RBUTTONUP:
+                self._free_mouse_down = False
+            elif event == cv2.EVENT_MOUSEMOVE and self._free_mouse_down:
+                dx = x - self._last_free_mouse_x
+                dy = y - self._last_free_mouse_y
+                self._last_free_mouse_x = x
+                self._last_free_mouse_y = y
+                self.free_cam_yaw += dx * 0.3
+                self.free_cam_pitch += dy * 0.3
+                self.free_cam_pitch = np.clip(self.free_cam_pitch, -89, 89)
+    
+    def toggle_camera_mode(self):
+        self.fpp_mode = not self.fpp_mode
+        if self.fpp_mode:
+            cv2.setMouseCallback('FPP View', self._mouse_event)
+        else:
+            cv2.setMouseCallback('FPP View', self._mouse_event)
+    
+    def move_free_camera(self, key, dt):
+        """Move the free camera based on keyboard input."""
+        move_speed = 10.0  # Increased from 5.0
+        rotate_speed = 2.0  # Increased from 1.0
+        
+        if key == ord('w'):
+            self.free_cam_pos += np.array([0, move_speed * dt, 0])
+        elif key == ord('s'):
+            self.free_cam_pos += np.array([0, -move_speed * dt, 0])
+        elif key == ord('a'):
+            self.free_cam_pos += np.array([-move_speed * dt, 0, 0])
+        elif key == ord('d'):
+            self.free_cam_pos += np.array([move_speed * dt, 0, 0])
+        elif key == 2490368:  # Up arrow
+            self.free_cam_pos += np.array([0, 0, move_speed * dt])
+        elif key == 2621440:  # Down arrow
+            self.free_cam_pos += np.array([0, 0, -move_speed * dt])
+        elif key == 2424832:  # Left arrow
+            self.free_cam_yaw += rotate_speed * dt
+        elif key == 2555904:  # Right arrow
+            self.free_cam_yaw -= rotate_speed * dt
+            
+        # Update camera view
+        self._update_camera_view()
+        
+    def _update_camera_view(self):
+        """Update the camera view based on current mode and position."""
+        if self.fpp_mode:
+            # Use drone's position and orientation for FPP view
+            drone_state = self.fleet.get_drone_states()[0]
+            pos = drone_state['position']
+            orn = drone_state['orientation']
+            yaw, pitch, roll = p.getEulerFromQuaternion(orn)
+            
+            # Set camera position slightly in front of drone
+            cam_pos = pos + np.array([
+                -np.sin(yaw) * 0.5,
+                np.cos(yaw) * 0.5,
+                0.1
+            ])
+            
+            # Set camera target in front of drone
+            target_pos = pos + np.array([
+                -np.sin(yaw) * 2.0,
+                np.cos(yaw) * 2.0,
+                0.0
+            ])
+            
+            p.resetDebugVisualizerCamera(
+                cameraDistance=0.1,
+                cameraYaw=np.degrees(yaw),
+                cameraPitch=np.degrees(pitch),
+                cameraTargetPosition=target_pos
+            )
+        else:
+            # Use free camera position and orientation
+            p.resetDebugVisualizerCamera(
+                cameraDistance=0.1,
+                cameraYaw=np.degrees(self.free_cam_yaw),
+                cameraPitch=np.degrees(self.free_cam_pitch),
+                cameraTargetPosition=self.free_cam_pos
+            )
     
     def add_obstacle(self, position: np.ndarray, size: np.ndarray, 
                     obstacle_type: str = "box", color: Tuple[float, float, float, float] = (0.5, 0.5, 0.5, 1)):
@@ -227,7 +321,7 @@ class Simulator:
             
             # Update displays
             if hasattr(self, 'client') and p.isConnected(self.client):
-                cv2.imshow('Drone Camera View', rgb_image)
+                cv2.imshow('FPP View', rgb_image)
                 self.update_status_display(mode)
                 cv2.waitKey(1)
             
@@ -241,67 +335,82 @@ class Simulator:
         # Convert image to uint8 if needed
         if image.dtype != np.uint8:
             image = (image * 255).astype(np.uint8)
-        
-        # Create a copy of the image
         overlay = image.copy()
-        
-        # Get drone states
-        states = self.fleet.get_drone_states()
-        
+        h, w = overlay.shape[:2]
+        # Draw semi-transparent bar at the top
+        bar_height = 60
+        cv2.rectangle(overlay, (0, 0), (w, bar_height), (30, 30, 30), -1)
+        alpha_bar = 0.6
+        image = cv2.addWeighted(overlay, alpha_bar, image, 1 - alpha_bar, 0)
+        # Draw crosshair at center
+        cx, cy = w // 2, h // 2
+        cv2.drawMarker(image, (cx, cy), (0, 255, 255), markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2)
         # Add state information with modern font and styling
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.5
-        font_thickness = 1
-        
-        # Display information for each drone
+        font = cv2.FONT_HERSHEY_DUPLEX
+        font_scale = 0.7
+        font_thickness = 2
+        states = self.fleet.get_drone_states()
         for i, state in enumerate(states):
             pos = state['position']
             vel = state['velocity']
-            
-            # Drone number
-            cv2.putText(overlay, f"Drone {i+1}:", (10, 20 + i*30), font, font_scale, (255, 255, 255), font_thickness)
-            
-            # Position information
+            y0 = 25 + i*30
+            cv2.putText(image, f"Drone {i+1}", (10, y0), font, font_scale, (255, 255, 0), font_thickness)
             pos_text = f"POS: X:{pos[0]:+.2f} Y:{pos[1]:+.2f} Z:{pos[2]:+.2f}"
-            cv2.putText(overlay, pos_text, (20, 20 + i*30), font, font_scale, (0, 255, 255), font_thickness)
-            
-            # Velocity information
+            cv2.putText(image, pos_text, (120, y0), font, 0.6, (0, 255, 255), 1)
             vel_text = f"VEL: X:{vel[0]:+.2f} Y:{vel[1]:+.2f} Z:{vel[2]:+.2f}"
-            cv2.putText(overlay, vel_text, (20, 40 + i*30), font, font_scale, (0, 255, 255), font_thickness)
-        
-        # Blend the overlay with the original image
-        alpha = 0.8
-        image = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
-        
+            cv2.putText(image, vel_text, (120, y0+18), font, 0.6, (0, 255, 255), 1)
         return image
     
     def _get_camera_images(self) -> Tuple[np.ndarray, np.ndarray]:
         """Get enhanced camera images."""
         states = self.fleet.get_drone_states()
-        if len(states) == 0:
-            # fallback to default
+        if self.fpp_mode and len(states) > 0:
+            # FPP: Use drone's position and orientation
+            pos = states[0]['position']
+            orn = states[0]['orientation']
+            yaw = orn[2]  # yaw from euler angles
+            pitch = orn[1]
+            # Camera eye: slightly above and behind the drone
+            eye = pos + np.array([
+                -np.sin(yaw) * 0.3,
+                np.cos(yaw) * 0.3,
+                0.15
+            ])
+            # Camera target: look forward from drone
+            target = pos + np.array([
+                np.sin(yaw) * 2.0,
+                np.cos(yaw) * 2.0,
+                0.0
+            ])
+            up = [0, 0, 1]
+        elif not self.fpp_mode:
+            # Free camera
+            eye = self.free_cam_pos
+            yaw = np.deg2rad(self.free_cam_yaw)
+            pitch = np.deg2rad(self.free_cam_pitch)
+            look_dir = np.array([
+                np.sin(yaw) * np.cos(pitch),
+                np.cos(yaw) * np.cos(pitch),
+                np.sin(pitch)
+            ])
+            target = eye + look_dir
+            up = [0, 0, 1]
+        else:
+            # fallback
             eye = [0, 0, 2]
             target = [0, 0, 0]
-        else:
-            # Use the first drone's position
-            pos = states[0]['position']
-            # Camera slightly above and behind the drone, looking forward
-            eye = [pos[0], pos[1] - 2, pos[2] + 1]
-            target = [pos[0], pos[1], pos[2]]
-
+            up = [0, 0, 1]
         view_matrix = p.computeViewMatrix(
             cameraEyePosition=eye,
             cameraTargetPosition=target,
-            cameraUpVector=[0, 0, 1]
+            cameraUpVector=up
         )
-
         proj_matrix = p.computeProjectionMatrixFOV(
             fov=self.camera_fov,
             aspect=self.camera_aspect,
             nearVal=self.camera_near,
             farVal=self.camera_far
         )
-
         width, height, rgb_img, depth_img, seg_img = p.getCameraImage(
             width=self.camera_width,
             height=self.camera_height,
@@ -310,7 +419,6 @@ class Simulator:
             renderer=p.ER_BULLET_HARDWARE_OPENGL,
             flags=p.ER_NO_SEGMENTATION_MASK
         )
-
         rgb_image = np.reshape(rgb_img, (height, width, 4))[:, :, :3]
         depth_image = np.reshape(depth_img, (height, width))
         rgb_image = (rgb_image * 255).astype(np.uint8)
@@ -416,4 +524,8 @@ class Simulator:
         gx, gy = grid_pos
         x = (gx / (grid_size-1)) * world_size - world_size/2
         y = (gy / (grid_size-1)) * world_size - world_size/2
-        return [x, y, z] 
+        return [x, y, z]
+
+    def set_drone_position(self, drone_idx, position, orientation=None):
+        """Set the position (and optionally orientation) of a drone immediately."""
+        self.fleet.set_drone_position(drone_idx, position, orientation) 

@@ -108,8 +108,8 @@ class PathPlanner:
         pq = PriorityQueue()
         pq.put((f_score[start_grid], start_grid))
         
-        # Search directions (4-connected grid)
-        directions = [(-1,0), (1,0), (0,-1), (0,1)]
+        # Search directions (8-connected grid)
+        directions = [(-1,0), (1,0), (0,-1), (0,1), (-1,-1), (-1,1), (1,-1), (1,1)]
         
         while not pq.empty():
             _, current = pq.get()
@@ -121,7 +121,8 @@ class PathPlanner:
                     path.append(self.grid_to_world(current))
                     current = prev[current]
                 path.append(self.grid_to_world(start_grid))
-                return path[::-1]
+                path = path[::-1]
+                return self.path_smooth(path)
             
             visited.add(current)
             
@@ -176,4 +177,23 @@ class PathPlanner:
         self.no_fly_zones.clear()
         for zone in zones:
             grid_pos = self.world_to_grid(zone['position'])
-            self.no_fly_zones.add(grid_pos) 
+            self.no_fly_zones.add(grid_pos)
+    
+    def path_smooth(self, path: List[np.ndarray]) -> List[np.ndarray]:
+        """Remove unnecessary waypoints (collinear points) from the path."""
+        if len(path) <= 2:
+            return path
+        smoothed = [path[0]]
+        for i in range(1, len(path)-1):
+            prev = smoothed[-1]
+            curr = path[i]
+            next = path[i+1]
+            v1 = curr - prev
+            v2 = next - curr
+            v1 = v1 / (np.linalg.norm(v1) + 1e-8)
+            v2 = v2 / (np.linalg.norm(v2) + 1e-8)
+            # If direction changes, keep the waypoint
+            if not np.allclose(v1, v2, atol=1e-2):
+                smoothed.append(curr)
+        smoothed.append(path[-1])
+        return smoothed 

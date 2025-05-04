@@ -129,3 +129,7 @@ class DroneFleet:
         """Clean up resources."""
         for drone in self.drones:
             drone.reset(position=[1000, 1000, 1000])  # Move far away 
+    
+    def set_drone_position(self, drone_idx, position, orientation=None):
+        if 0 <= drone_idx < len(self.drones):
+            self.drones[drone_idx].set_position(position) 
