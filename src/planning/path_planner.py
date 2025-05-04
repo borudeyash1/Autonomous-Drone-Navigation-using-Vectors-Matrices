@@ -197,3 +197,67 @@ class PathPlanner:
                 smoothed.append(curr)
         smoothed.append(path[-1])
         return smoothed 
+
+    def world_to_grid_3d(self, pos: np.ndarray) -> Tuple[int, int, int]:
+        x = int(round((pos[0] + self.world_size/2) / (self.world_size / (self.grid_size-1))))
+        y = int(round((pos[1] + self.world_size/2) / (self.world_size / (self.grid_size-1))))
+        z = int(round((pos[2]) / (self.world_size / (self.grid_size-1))))
+        return (x, y, z)
+
+    def grid_to_world_3d(self, pos: Tuple[int, int, int]) -> np.ndarray:
+        x = (pos[0] / (self.grid_size-1)) * self.world_size - self.world_size/2
+        y = (pos[1] / (self.grid_size-1)) * self.world_size - self.world_size/2
+        z = (pos[2] / (self.grid_size-1)) * self.world_size
+        return np.array([x, y, z])
+
+    def is_valid_position_3d(self, pos: Tuple[int, int, int], obstacles_3d: list) -> bool:
+        x, y, z = pos
+        if not (0 <= x < self.grid_size and 0 <= y < self.grid_size and 0 <= z < self.grid_size):
+            return False
+        for ox, oy, oz, w, l, h in obstacles_3d:
+            if (ox <= x < ox+w) and (oy <= y < oy+l) and (oz <= z < oz+h):
+                return False
+        return True
+
+    def plan_path_3d(self, start: np.ndarray, end: np.ndarray, obstacles_3d: list) -> list:
+        start_grid = self.world_to_grid_3d(start)
+        end_grid = self.world_to_grid_3d(end)
+        from queue import PriorityQueue
+        visited = set()
+        prev = {}
+        g_score = {start_grid: 0}
+        f_score = {start_grid: self.heuristic_3d(start_grid, end_grid)}
+        pq = PriorityQueue()
+        pq.put((f_score[start_grid], start_grid))
+        # 26-connected neighbors
+        directions = [(dx,dy,dz) for dx in [-1,0,1] for dy in [-1,0,1] for dz in [-1,0,1] if not (dx==0 and dy==0 and dz==0)]
+        while not pq.empty():
+            _, current = pq.get()
+            if current == end_grid:
+                path = []
+                while current != start_grid:
+                    path.append(self.grid_to_world_3d(current))
+                    current = prev[current]
+                path.append(self.grid_to_world_3d(start_grid))
+                return path[::-1]
+            visited.add(current)
+            for dx, dy, dz in directions:
+                neighbor = (current[0]+dx, current[1]+dy, current[2]+dz)
+                if not self.is_valid_position_3d(neighbor, obstacles_3d) or neighbor in visited:
+                    continue
+                # Human-like logic: prefer up if vertical cost < horizontal detour
+                vertical_cost = abs(dz)
+                horizontal_cost = abs(dx) + abs(dy)
+                cost = 1.0
+                if vertical_cost > 0 and vertical_cost < horizontal_cost:
+                    cost = 0.7  # prefer up if it's shorter
+                tentative_g = g_score[current] + cost
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                    prev[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    f_score[neighbor] = tentative_g + self.heuristic_3d(neighbor, end_grid)
+                    pq.put((f_score[neighbor], neighbor))
+        return []
+
+    def heuristic_3d(self, a: Tuple[int,int,int], b: Tuple[int,int,int]) -> float:
+        return abs(a[0]-b[0]) + abs(a[1]-b[1]) + abs(a[2]-b[2]) 

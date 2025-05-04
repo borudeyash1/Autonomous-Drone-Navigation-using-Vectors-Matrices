@@ -528,4 +528,27 @@ class Simulator:
 
     def set_drone_position(self, drone_idx, position, orientation=None):
         """Set the position (and optionally orientation) of a drone immediately."""
-        self.fleet.set_drone_position(drone_idx, position, orientation) 
+        self.fleet.set_drone_position(drone_idx, position, orientation)
+
+    def add_building(self, position: np.ndarray, size: np.ndarray, color=(0.5, 0.5, 0.5, 1)):
+        """Add a 3D building (cuboid) to the environment."""
+        visual_shape = p.createVisualShape(
+            shapeType=p.GEOM_BOX,
+            halfExtents=size/2,
+            rgbaColor=color,
+            specularColor=[0.6, 0.6, 0.6],
+            visualFramePosition=[0, 0, 0]
+        )
+        collision_shape = p.createCollisionShape(
+            shapeType=p.GEOM_BOX,
+            halfExtents=size/2
+        )
+        building_id = p.createMultiBody(
+            baseMass=0,
+            baseCollisionShapeIndex=collision_shape,
+            baseVisualShapeIndex=visual_shape,
+            basePosition=position,
+            baseOrientation=p.getQuaternionFromEuler([0, 0, 0])
+        )
+        self.obstacle_ids.append(building_id)
+        return building_id 

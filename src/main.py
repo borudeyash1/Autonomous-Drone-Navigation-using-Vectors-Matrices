@@ -10,6 +10,8 @@ from planning.path_planner import PathPlanner
 from control.controller import Controller
 from ui.map_ui import MapUI
 from typing import List, Dict, Tuple
+import math
+import random
 
 def create_status_window():
     """Create a window to display drone status."""
@@ -92,7 +94,7 @@ def get_parameter_values():
     return np.array([thrust, roll, pitch, yaw])
 
 def animate_drones(simulator: Simulator, paths: List[List[Tuple[float, float, float]]], 
-                  dynamic_obstacles: List[Dict] = None, no_fly_zones: List[Dict] = None, map_ui=None):
+                  dynamic_obstacles: List[Dict] = None, no_fly_zones: List[Dict] = None, map_ui=None, end_world=None, planner=None, obstacles=None):
     """
     Animate the drones along their paths.
     
@@ -102,6 +104,8 @@ def animate_drones(simulator: Simulator, paths: List[List[Tuple[float, float, fl
         dynamic_obstacles: List of dynamic obstacles
         no_fly_zones: List of no-fly zones
         map_ui: MapUI instance
+        end_world: End world coordinates
+        planner: PathPlanner instance
     """
     # Create status and parameter windows
     create_status_window()
@@ -117,6 +121,15 @@ def animate_drones(simulator: Simulator, paths: List[List[Tuple[float, float, fl
     pressed_keys = set()
     camera_keys = {ord('w'), ord('a'), ord('s'), ord('d'), 2490368, 2621440, 2424832, 2555904}
     last_time = time.time()
+    greedy_mode = False
+    
+    sim_dt = 1/240
+    render_dt = 1/60
+    last_render = time.time()
+    stuck_timer = 0
+    stuck_threshold = 1.0  # seconds
+    stuck_distance = 0.5
+    last_pos = None
     
     while running:
         current_time = time.time()
@@ -129,9 +142,9 @@ def animate_drones(simulator: Simulator, paths: List[List[Tuple[float, float, fl
             pressed_keys.add(key)
         # Remove released keys
         for k in list(pressed_keys):
-            if k != key and k not in [ord('q'), ord('m'), ord('c')]:
+            if k != key and k not in [ord('q'), ord('m'), ord('c'), ord('g'), 9]:
                 pressed_keys.remove(k)
-                
+        
         if key == ord('q'):
             running = False
         elif key == ord('m'):
@@ -140,75 +153,89 @@ def animate_drones(simulator: Simulator, paths: List[List[Tuple[float, float, fl
         elif key == ord('c') or key == 9:  # 'c' or Tab
             simulator.toggle_camera_mode()
             print(f"[INFO] Camera mode: {'FPP' if simulator.fpp_mode else 'Free View'} (press Tab or 'c' to toggle)")
-            
+        elif key == ord('g'):
+            greedy_mode = not greedy_mode
+            print(f"[INFO] Pathfinding mode: {'Greedy' if greedy_mode else 'A*'} (press 'g' to toggle)")
+        
         # Continuous camera movement in Free View with higher speed
         if not simulator.fpp_mode:
             for k in pressed_keys:
                 if k in camera_keys:
                     simulator.move_free_camera(k, dt)
-                    
+        
         # Get current states
         states = simulator.fleet.get_drone_states()
         
-        # Update status display less frequently to reduce overhead
-        if current_time % 0.1 < dt:  # Update every 0.1 seconds
-            update_status_display(states, mode)
-            
-        # Update 2D path tracking for each drone
-        if map_ui is not None:
-            for i, state in enumerate(states):
-                pos = state['position']
-                grid_size = map_ui.grid_size
-                world_size = 10.0
-                gx = int(round((pos[0] + world_size/2) / world_size * (grid_size-1)))
-                gy = int(round((pos[1] + world_size/2) / world_size * (grid_size-1)))
-                gx = max(0, min(grid_size-1, gx))
-                gy = max(0, min(grid_size-1, gy))
-                map_ui.update_drone_path(i, gx, gy)
-                
-        # Control inputs for each drone
-        control_inputs = []
-        for i, (state, path, controller) in enumerate(zip(states, paths, controllers)):
-            if mode == "Manual":
-                control_input = get_parameter_values()
-            else:
-                if path:
-                    target_pos = np.array(path[0])
-                    control_input = controller.compute_control(state, {'position': target_pos}, dt)
-                    if np.linalg.norm(state['position'] - target_pos) < 0.4:
-                        path.pop(0)
+        # Run multiple simulation steps per render frame
+        sim_steps = int(max(1, dt / sim_dt))
+        for _ in range(sim_steps):
+            # Control inputs for each drone
+            control_inputs = []
+            for i, (state, path, controller) in enumerate(zip(states, paths, controllers)):
+                if mode == "Manual":
+                    control_input = get_parameter_values()
                 else:
-                    control_input = np.array([9.81, 0, 0, 0])
-            control_inputs.append(control_input)
-            
-        # Run multiple simulation steps per frame for faster response
-        steps_per_frame = 8  # Increased from 4 to 8
-        for _ in range(steps_per_frame):
-            simulator.step(control_inputs, dt/steps_per_frame)
-            
-        # Update dynamic obstacles and no-fly zones less frequently
-        if current_time % 0.05 < dt:  # Update every 0.05 seconds
-            if dynamic_obstacles:
-                for obstacle in dynamic_obstacles:
-                    if isinstance(obstacle, dict) and 'position' in obstacle and 'velocity' in obstacle:
-                        obstacle['position'] += obstacle['velocity'] * dt
-                        if obstacle['position'][0] > 10 or obstacle['position'][0] < -10:
-                            obstacle['velocity'][0] *= -1
-                        if obstacle['position'][1] > 10 or obstacle['position'][1] < -10:
-                            obstacle['velocity'][1] *= -1
-                            
-            if no_fly_zones:
-                for zone in no_fly_zones:
-                    if isinstance(zone, dict) and 'position' in zone and 'velocity' in zone:
-                        zone['position'] += zone['velocity'] * dt
-                        if zone['position'][0] > 10 or zone['position'][0] < -10:
-                            zone['velocity'][0] *= -1
-                        if zone['position'][1] > 10 or zone['position'][1] < -10:
-                            zone['velocity'][1] *= -1
-                            
-        # Keep 2D map visible and updated (optimize: only redraw every 0.05s)
-        if map_ui is not None and current_time % 0.05 < dt:
-            map_ui.draw()
+                    # Check if direct line to endpoint is clear (2D)
+                    pos2d = np.array([state['position'][0], state['position'][1]])
+                    end2d = np.array([end_world[0], end_world[1]])
+                    grid_pos = planner.world_to_grid(np.array([pos2d[0], pos2d[1], 0]))
+                    grid_end = planner.world_to_grid(np.array([end2d[0], end2d[1], 0]))
+                    direct_clear = True
+                    for gx, gy in bresenham_line(grid_pos[0], grid_pos[1], grid_end[0], grid_end[1]):
+                        if (gx, gy) in obstacles:
+                            direct_clear = False
+                            break
+                    if direct_clear:
+                        target_pos = np.array([end_world[0], end_world[1], end_world[2]])
+                    else:
+                        # Follow next waypoint in 2D path
+                        if path:
+                            target_pos = path[0]
+                            if np.linalg.norm(state['position'] - target_pos) < 0.5:
+                                path.pop(0)
+                        else:
+                            target_pos = np.array([end_world[0], end_world[1], end_world[2]])
+                    control_input = controller.compute_control(state, {'position': target_pos}, sim_dt)
+                control_inputs.append(control_input)
+            simulator.step(control_inputs, mode)
+        
+        # Check if drone is stuck (not progressing)
+        if last_pos is not None:
+            dist = np.linalg.norm(states[0]['position'] - last_pos)
+            if dist < stuck_distance:
+                stuck_timer += dt
+            else:
+                stuck_timer = 0
+            if stuck_timer > stuck_threshold:
+                print("[INFO] Drone stuck, replanning...")
+                # Replan path
+                path = planner.plan_path_3d(states[0]['position'], end_world, buildings)
+                paths[0] = path
+                simulator.fleet.set_drone_path(0, path)
+                stuck_timer = 0
+        last_pos = np.copy(states[0]['position'])
+        
+        # Render at 60 FPS
+        if current_time - last_render >= render_dt:
+            # Get current states
+            states = simulator.fleet.get_drone_states()
+            # Update status display
+            update_status_display(states, mode)
+            # Update 2D path tracking for each drone
+            if map_ui is not None:
+                for i, state in enumerate(states):
+                    pos = state['position']
+                    grid_size = map_ui.grid_size
+                    world_size = 10.0
+                    gx = int(round((pos[0] + world_size/2) / world_size * (grid_size-1)))
+                    gy = int(round((pos[1] + world_size/2) / world_size * (grid_size-1)))
+                    gx = max(0, min(grid_size-1, gx))
+                    gy = max(0, min(grid_size-1, gy))
+                    map_ui.update_drone_path(i, gx, gy)
+            # Keep 2D map visible and updated
+            if map_ui is not None:
+                map_ui.draw()
+            last_render = current_time
     
     # Clean up
     cv2.destroyAllWindows()
@@ -227,25 +254,37 @@ def main():
     
     # Convert grid start/end to world coordinates
     start_world = planner.grid_to_world(start, z=1.0)
-    end_world = planner.grid_to_world(end, z=1.0)
+    # Remove dynamic obstacles from environment setup
+    buildings = []
+    for obs in obstacles:
+        size = obstacle_sizes.get(obs, (1, 1))
+        world_pos = planner.grid_to_world(obs, z=0.5)
+        bw = size[0] * (10.0 / map_ui.grid_size)
+        bl = size[1] * (10.0 / map_ui.grid_size)
+        bh = random.uniform(2.0, 5.0)
+        buildings.append((world_pos[0], world_pos[1], bh/2, bw, bl, bh))
+        simulator.add_building(np.array([world_pos[0], world_pos[1], bh/2]), np.array([bw, bl, bh]), color=(0.3, 0.3, 0.7, 1))
+    # End point can be on ground or on top of a building
+    if random.random() < 0.5 or not buildings:
+        end_world = planner.grid_to_world(end, z=1.0)
+    else:
+        b = random.choice(buildings)
+        end_world = np.array([b[0], b[1], b[2]+b[5]/2])
     start_positions = [start_world]
     end_positions = [end_world]
-    
-    # Set the drone's initial position to the start point
-    simulator.set_drone_position(0, start_world)
-    
-    # Plan path for the single drone
-    paths = []
-    for start, end in zip(start_positions, end_positions):
-        path = planner.plan_path(start, end)
-        if path:
-            paths.append(path)
-        else:
-            print(f"Warning: Could not find path from {start} to {end}")
-            paths.append([])
-    
-    # Set path in the simulator
-    simulator.fleet.set_drone_path(0, paths[0])
+    print(f"[ENV] Buildings: {buildings}")
+    print(f"[ENV] Start: {start_world}, End: {end_world}")
+    # Plan 2D path using A* on the grid
+    path2d = planner.plan_path(start_world, end_world)
+    # Convert 2D path to 3D: set z=1.0 for all waypoints except endpoint
+    path3d = []
+    for wp in path2d[:-1]:
+        path3d.append(np.array([wp[0], wp[1], 1.0]))
+    # For endpoint, use its actual z (could be on a building)
+    if path2d:
+        path3d.append(np.array([end_world[0], end_world[1], end_world[2]]))
+    paths = [path3d]
+    simulator.fleet.set_drone_path(0, path3d)
     
     # Add 3D static obstacles
     for obs in obstacles:
@@ -253,11 +292,6 @@ def main():
         world_pos = planner.grid_to_world(obs, z=0.5)
         box_size = np.array([size[0], size[1], 1.0])
         simulator.add_obstacle(world_pos, box_size, obstacle_type="box", color=(0.2, 0.2, 0.2, 1))
-
-    # Add 3D dynamic obstacles (blue)
-    for dyn in dynamic_obstacles:
-        world_pos = planner.grid_to_world(dyn, z=0.5)
-        simulator.add_obstacle(world_pos, np.array([1.0, 1.0, 1.0]), obstacle_type="box", color=(0, 0, 1, 1))
 
     # Add 3D no-fly zones (red, semi-transparent)
     for nfz in no_fly_zones:
@@ -274,12 +308,104 @@ def main():
     if hasattr(simulator, 'set_camera_target'):
         simulator.set_camera_target(start_positions[0])
     
-    # Animate the drones, pass map_ui
-    animate_drones(simulator, paths, dynamic_obstacles, no_fly_zones, map_ui=map_ui)
+    # Animate the drones, pass map_ui and end_world
+    animate_drones(simulator, paths, dynamic_obstacles, no_fly_zones, map_ui=map_ui, end_world=end_world, planner=planner, obstacles=obstacles)
     
     # Clean up
     map_ui.close()
     simulator.close()
+
+# Add Bresenham's line algorithm for grid raycasting
+
+def bresenham_line(x0, y0, x1, y1):
+    """Yield grid cells on a line from (x0, y0) to (x1, y1)."""
+    dx = abs(x1 - x0)
+    dy = abs(y1 - y0)
+    x, y = x0, y0
+    sx = 1 if x1 > x0 else -1
+    sy = 1 if y1 > y0 else -1
+    if dx > dy:
+        err = dx / 2.0
+        while x != x1:
+            yield (x, y)
+            err -= dy
+            if err < 0:
+                y += sy
+                err += dx
+            x += sx
+    else:
+        err = dy / 2.0
+        while y != y1:
+            yield (x, y)
+            err -= dx
+            if err < 0:
+                x += sx
+                err += dy
+            y += sy
+    yield (x, y)
+
+# Helper: 3D Bresenham's line for grid
+def bresenham_line_3d(x0, y0, z0, x1, y1, z1):
+    dx = abs(x1 - x0)
+    dy = abs(y1 - y0)
+    dz = abs(z1 - z0)
+    x, y, z = x0, y0, z0
+    sx = 1 if x1 > x0 else -1
+    sy = 1 if y1 > y0 else -1
+    sz = 1 if z1 > z0 else -1
+    if dx >= dy and dx >= dz:
+        yd, zd = dy - dx // 2, dz - dx // 2
+        while x != x1:
+            yield (x, y, z)
+            if yd >= 0:
+                y += sy
+                yd -= dx
+            if zd >= 0:
+                z += sz
+                zd -= dx
+            x += sx
+            yd += dy
+            zd += dz
+    elif dy >= dx and dy >= dz:
+        xd, zd = dx - dy // 2, dz - dy // 2
+        while y != y1:
+            yield (x, y, z)
+            if xd >= 0:
+                x += sx
+                xd -= dy
+            if zd >= 0:
+                z += sz
+                zd -= dy
+            y += sy
+            xd += dx
+            zd += dz
+    else:
+        xd, yd = dx - dz // 2, dy - dz // 2
+        while z != z1:
+            yield (x, y, z)
+            if xd >= 0:
+                x += sx
+                xd -= dz
+            if yd >= 0:
+                y += sy
+                yd -= dz
+            z += sz
+            xd += dx
+            yd += dy
+    yield (x, y, z)
+
+# Direct line check for 3D obstacles
+def is_direct_path_clear_3d(start, end, buildings, planner):
+    g0 = planner.world_to_grid_3d(start)
+    g1 = planner.world_to_grid_3d(end)
+    for gx, gy, gz in bresenham_line_3d(g0[0], g0[1], g0[2], g1[0], g1[1], g1[2]):
+        for b in buildings:
+            bx, by, bz, bw, bl, bh = b
+            if (bx-bw/2 <= planner.grid_to_world_3d((gx,gy,gz))[0] <= bx+bw/2 and
+                by-bl/2 <= planner.grid_to_world_3d((gx,gy,gz))[1] <= by+bl/2 and
+                bz-bh/2 <= planner.grid_to_world_3d((gx,gy,gz))[2] <= bz+bh/2):
+                return False
+    return True
 
 if __name__ == "__main__":
     main() 
