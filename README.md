@@ -1,5 +1,8 @@
 # 🚁 Enhanced 3D Drone Navigation System
 
+![Enhanced 3D Drone Navigation System](images/drone_system_overview.png)
+*Enhanced 3D Drone Navigation System with real-time obstacle avoidance and interactive visualization*
+
 ## 📋 Project Overview
 
 An advanced autonomous drone navigation system featuring real-time obstacle avoidance, interactive 3D visualization, and intelligent path planning. The system uses vector-based navigation algorithms to enable drones to navigate complex environments while avoiding both static and dynamic obstacles.
@@ -7,24 +10,36 @@ An advanced autonomous drone navigation system featuring real-time obstacle avoi
 ## ✨ Key Features
 
 ### 🎮 Interactive Controls
+![Interactive Controls](images/controls_demo.png)
+*Real-time speed control and obstacle management interface*
+
 - **Real-time Speed Control**: Adjust drone speed during flight using +/- keys or preset speeds (0-9)
 - **Obstacle Management**: Add, edit, and delete obstacles in real-time during simulation
 - **Pause/Resume**: Pause simulation to safely add obstacles, then resume with automatic path replanning
 - **Multiple Obstacle Types**: Cylinders, cubes, and spheres with customizable sizes and heights
 
 ### 🧠 Intelligent Navigation
+![Path Planning Algorithm](images/pathfinding_demo.png)
+*A* pathfinding algorithm in action with dynamic replanning around obstacles*
+
 - **A* Pathfinding**: Efficient path planning around obstacles
 - **Dynamic Replanning**: Automatic route optimization when obstacles are added
 - **Smart Collision Detection**: Prevents drone overlap with obstacles and waypoints
 - **Adaptive Speed Control**: Speed adjustment based on proximity to obstacles
 
 ### 🖥️ Advanced Visualization
+![3D Visualization](images/3d_visualization.png)
+*Dual 3D and 2D visualization with real-time trajectory display*
+
 - **3D Environment**: Real-time 3D visualization with multiple camera angles
 - **2D Top-Down View**: Simultaneous 2D tracking for precise navigation
 - **Trajectory Display**: Shows both planned and actual flight paths
 - **Status Monitoring**: Real-time telemetry display with speed, position, and mission status
 
 ## 🚀 Quick Start
+
+![Quick Start Demo](images/quick_start_demo.png)
+*One-click launch with automatic setup and package installation*
 
 ### Prerequisites
 - Python 3.8 or higher
@@ -38,7 +53,7 @@ An advanced autonomous drone navigation system featuring real-time obstacle avoi
    ```
 
 2. **Run the enhanced system**:
-   ```bash
+```bash
    start_enhanced_drone.bat
    ```
 
@@ -48,6 +63,9 @@ The batch file will automatically:
 - Launch the enhanced 3D drone simulation
 
 ## 🎯 Available Simulation Modes
+
+![Simulation Modes](images/simulation_modes.png)
+*Different simulation modes for various use cases and performance requirements*
 
 ### 1. Enhanced 3D Drone (Recommended)
 ```bash
@@ -75,7 +93,7 @@ start_drone_obstacles.bat
 - Simplified controls
 
 ### 4. Headless Mode
-```bash
+  ```bash
 start_drone_headless.bat
 ```
 - No GUI interface
@@ -83,6 +101,9 @@ start_drone_headless.bat
 - Suitable for testing
 
 ## 🎮 Controls Reference
+
+![Controls Interface](images/controls_interface.png)
+*Complete keyboard and mouse controls for all system functions*
 
 ### Basic Controls
 | Key | Action |
@@ -123,6 +144,9 @@ start_drone_headless.bat
 
 ## 🏗️ System Architecture
 
+![System Architecture](images/system_architecture.png)
+*Modular architecture with four main components for scalable and maintainable code*
+
 ### Core Components
 
 #### 1. Path Planning (`src/planning/path_planner.py`)
@@ -162,6 +186,9 @@ start_drone_headless.bat
 
 ## 📊 Features Comparison
 
+![Features Comparison](images/features_comparison.png)
+*Comprehensive comparison of all simulation modes and their capabilities*
+
 | Feature | Enhanced 3D | Simple | With Obstacles | Headless |
 |---------|-------------|--------|----------------|----------|
 | 3D Visualization | ✅ | ❌ | ❌ | ❌ |
@@ -174,6 +201,9 @@ start_drone_headless.bat
 | Pause/Resume | ✅ | ❌ | ❌ | ❌ |
 
 ## 🎯 Use Cases
+
+![Use Cases](images/use_cases.png)
+*Diverse applications across education, research, and industry*
 
 ### Educational
 - **Robotics Learning**: Understand autonomous navigation concepts
@@ -191,6 +221,9 @@ start_drone_headless.bat
 - **Training**: Simulate complex scenarios for drone operators
 
 ## 🚨 Troubleshooting
+
+![Troubleshooting Guide](images/troubleshooting.png)
+*Common issues and solutions for smooth system operation*
 
 ### Common Issues
 
@@ -276,6 +309,9 @@ For questions, issues, or contributions:
 ---
 
 ## 🎉 Quick Demo Script
+
+![Demo Script](images/demo_script.png)
+*Step-by-step demonstration guide for presentations and hands-on sessions*
 
 ### For Presentations
 
