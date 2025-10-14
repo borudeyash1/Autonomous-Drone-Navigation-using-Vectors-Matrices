@@ -47,146 +47,162 @@ class MapUI:
         return None
 
     def _mouse_event(self, event, x, y, flags, param):
-        gx, gy = x // self.cell_size, y // self.cell_size
-        if gx >= self.grid_size or gy >= self.grid_size:
-            return
+        # Calculate grid position accurately
+        gx = max(0, min(self.grid_size - 1, x // self.cell_size))
+        gy = max(0, min(self.grid_size - 1, y // self.cell_size))
+        
+        # Always update mouse position for keyboard controls
+        self.last_mouse_pos = (gx, gy)
+        
         if self.locked:
             return
-        # End point: Ctrl+Right-click
-        if event == cv2.EVENT_RBUTTONDOWN and (flags & cv2.EVENT_FLAG_CTRLKEY):
-            self.end = (gx, gy)
-            return
-        # No-fly zone: shift+left-click
-        if event == cv2.EVENT_LBUTTONDOWN and (flags & cv2.EVENT_FLAG_SHIFTKEY):
-            self.nofly_zones.add((gx, gy))
-            return
-        # Dynamic obstacle: right-click (no Ctrl)
-        if event == cv2.EVENT_RBUTTONDOWN:
-            self.dynamic_obstacles.add((gx, gy))
-            return
+        
+        # Debug: Print event info
+        print(f"[DEBUG] Mouse event: {event}, flags: {flags}, pos: ({gx}, {gy})")
+        
+        # Check for modifier keys first
+        ctrl_pressed = bool(flags & cv2.EVENT_FLAG_CTRLKEY)
+        shift_pressed = bool(flags & cv2.EVENT_FLAG_SHIFTKEY)
+        
+        # Handle different mouse events
         if event == cv2.EVENT_LBUTTONDOWN:
-            # Check for resize
-            for obs in self.obstacles:
-                corner = self._find_resize_corner(obs[0], obs[1], x, y)
-                if corner:
-                    self._resizing_obstacle = True
-                    self._resize_origin = obs
-                    self._resize_corner = corner
-                    return
-            if (gx, gy) in self.obstacles:
-                self._dragging_obstacle = True
-                self._dragged_obstacle = (gx, gy)
+            if ctrl_pressed:
+                # Ctrl+Left-click: Toggle Dynamic Obstacle (Blue)
+                if (gx, gy) in self.dynamic_obstacles:
+                    self.dynamic_obstacles.remove((gx, gy))
+                    print(f"[MAP] Dynamic obstacle removed at ({gx}, {gy})")
+                else:
+                    self.dynamic_obstacles.add((gx, gy))
+                    print(f"[MAP] Dynamic obstacle added at ({gx}, {gy})")
+            elif shift_pressed:
+                # Shift+Left-click: Toggle No-Fly Zone (Red)
+                if (gx, gy) in self.nofly_zones:
+                    self.nofly_zones.remove((gx, gy))
+                    print(f"[MAP] No-fly zone removed at ({gx}, {gy})")
+                else:
+                    self.nofly_zones.add((gx, gy))
+                    print(f"[MAP] No-fly zone added at ({gx}, {gy})")
             else:
+                # Left-click: Set Start Point (Green)
                 self.start = (gx, gy)
-            # Path dragging
-            for idx, (px, py) in enumerate(self.path):
-                if abs(gx-px)<=0 and abs(gy-py)<=0:
-                    self._dragging_path = True
-                    self._dragged_path_idx = idx
-                    return
-        elif event == cv2.EVENT_MOUSEMOVE and self._resizing_obstacle:
-            # Resize obstacle
-            ox, oy = self._resize_origin
-            size = list(self.obstacle_sizes.get((ox,oy), (1,1)))
-            dx = (x - ox*self.cell_size) // self.cell_size
-            dy = (y - oy*self.cell_size) // self.cell_size
-            if self._resize_corner == 'br':
-                size[0] = max(1, dx)
-                size[1] = max(1, dy)
-            elif self._resize_corner == 'tr':
-                size[0] = max(1, dx)
-            elif self._resize_corner == 'bl':
-                size[1] = max(1, dy)
-            self.obstacle_sizes[(ox,oy)] = tuple(size)
-        elif event == cv2.EVENT_LBUTTONUP and self._resizing_obstacle:
-            self._resizing_obstacle = False
-            self._resize_origin = None
-            self._resize_corner = None
-        elif event == cv2.EVENT_MOUSEMOVE and self._dragging_obstacle:
-            pass
-        elif event == cv2.EVENT_LBUTTONUP and self._dragging_obstacle:
-            if self._dragged_obstacle:
-                self.obstacles.discard(self._dragged_obstacle)
-                self.map[self._dragged_obstacle[1], self._dragged_obstacle[0]] = 255
+                print(f"[MAP] Start point set at ({gx}, {gy})")
+                
+        elif event == cv2.EVENT_RBUTTONDOWN:
+            # Right-click: Set End Point (Red)
+            self.end = (gx, gy)
+            print(f"[MAP] End point set at ({gx}, {gy})")
+            
+        elif event == cv2.EVENT_MBUTTONDOWN:
+            # Middle-click: Toggle Static Obstacle (Black)
+            if (gx, gy) in self.obstacles:
+                self.obstacles.remove((gx, gy))
+                self.map[gy, gx] = 255
+                print(f"[MAP] Static obstacle removed at ({gx}, {gy})")
+            else:
                 self.obstacles.add((gx, gy))
                 self.map[gy, gx] = 0
-                # Move size info
-                if self._dragged_obstacle in self.obstacle_sizes:
-                    self.obstacle_sizes[(gx,gy)] = self.obstacle_sizes.pop(self._dragged_obstacle)
-            self._dragging_obstacle = False
-            self._dragged_obstacle = None
-        elif event == cv2.EVENT_MBUTTONDOWN:
-            self.obstacles.add((gx, gy))
-            self.map[gy, gx] = 0
-            self.obstacle_sizes[(gx,gy)] = (1,1)
-        elif event == cv2.EVENT_MOUSEMOVE and self._dragging_path:
-            if self._dragged_path_idx is not None:
-                self.path[self._dragged_path_idx] = (gx, gy)
-        elif event == cv2.EVENT_LBUTTONUP and self._dragging_path:
-            self._dragging_path = False
-            self._dragged_path_idx = None
+                self.obstacle_sizes[(gx, gy)] = (1, 1)
+                print(f"[MAP] Static obstacle added at ({gx}, {gy})")
+        
+        # Also track mouse movement for keyboard controls
+        elif event == cv2.EVENT_MOUSEMOVE:
+            self.last_mouse_pos = (gx, gy)
 
     def draw(self):
         img = np.ones((self.grid_size * self.cell_size, self.grid_size * self.cell_size, 3), dtype=np.uint8) * 255
+        
+        # Draw grid first
+        for i in range(self.grid_size + 1):
+            cv2.line(img, (0, i * self.cell_size), (self.grid_size * self.cell_size, i * self.cell_size), (200, 200, 200), 1)
+            cv2.line(img, (i * self.cell_size, 0), (i * self.cell_size, self.grid_size * self.cell_size), (200, 200, 200), 1)
+        
         # Draw no-fly zones (red)
         for (gx, gy) in self.nofly_zones:
-            cv2.rectangle(img, (gx*self.cell_size, gy*self.cell_size), ((gx+1)*self.cell_size, (gy+1)*self.cell_size), (0,0,255), -1)
+            cv2.rectangle(img, (gx * self.cell_size, gy * self.cell_size), 
+                         ((gx + 1) * self.cell_size, (gy + 1) * self.cell_size), (0, 0, 255), -1)
+        
         # Draw dynamic obstacles (blue)
         for (gx, gy) in self.dynamic_obstacles:
-            cv2.rectangle(img, (gx*self.cell_size, gy*self.cell_size), ((gx+1)*self.cell_size, (gy+1)*self.cell_size), (255,0,0), -1)
+            cv2.rectangle(img, (gx * self.cell_size, gy * self.cell_size), 
+                         ((gx + 1) * self.cell_size, (gy + 1) * self.cell_size), (255, 0, 0), -1)
+        
         # Draw static obstacles (black)
         for (gx, gy) in self.obstacles:
-            size = self.obstacle_sizes.get((gx,gy), (1,1))
-            cv2.rectangle(img, (gx*self.cell_size, gy*self.cell_size), ((gx+size[0])*self.cell_size, (gy+size[1])*self.cell_size), (0,0,0), -1)
-            for dx,dy in [(0,0),(size[0],0),(0,size[1]),(size[0],size[1])]:
-                cx, cy = (gx+dx)*self.cell_size, (gy+dy)*self.cell_size
-                cv2.circle(img, (cx,cy), 5, (0,0,255), -1)
-        # Draw path
+            size = self.obstacle_sizes.get((gx, gy), (1, 1))
+            cv2.rectangle(img, (gx * self.cell_size, gy * self.cell_size), 
+                         ((gx + size[0]) * self.cell_size, (gy + size[1]) * self.cell_size), (0, 0, 0), -1)
+        
+        # Draw path (yellow)
         for (gx, gy) in self.path:
-            cv2.rectangle(img, (gx*self.cell_size, gy*self.cell_size), ((gx+1)*self.cell_size, (gy+1)*self.cell_size), (0,255,255), -1)
-        # Draw start
+            cv2.rectangle(img, (gx * self.cell_size, gy * self.cell_size), 
+                         ((gx + 1) * self.cell_size, (gy + 1) * self.cell_size), (0, 255, 255), -1)
+        
+        # Draw start point (green)
         if self.start:
-            cv2.rectangle(img, (self.start[0]*self.cell_size, self.start[1]*self.cell_size), ((self.start[0]+1)*self.cell_size, (self.start[1]+1)*self.cell_size), (0,255,0), -1)
-        # Draw end
+            cv2.rectangle(img, (self.start[0] * self.cell_size, self.start[1] * self.cell_size), 
+                         ((self.start[0] + 1) * self.cell_size, (self.start[1] + 1) * self.cell_size), (0, 255, 0), -1)
+            # Add "START" label
+            cv2.putText(img, "START", (self.start[0] * self.cell_size + 5, self.start[1] * self.cell_size + 15), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        
+        # Draw end point (red)
         if self.end:
-            cv2.rectangle(img, (self.end[0]*self.cell_size, self.end[1]*self.cell_size), ((self.end[0]+1)*self.cell_size, (self.end[1]+1)*self.cell_size), (0,0,255), -1)
-        # Draw drone
+            cv2.rectangle(img, (self.end[0] * self.cell_size, self.end[1] * self.cell_size), 
+                         ((self.end[0] + 1) * self.cell_size, (self.end[1] + 1) * self.cell_size), (0, 0, 255), -1)
+            # Add "END" label
+            cv2.putText(img, "END", (self.end[0] * self.cell_size + 5, self.end[1] * self.cell_size + 15), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        
+        # Draw drone position
         if self.drone_pos:
-            cv2.circle(img, (self.drone_pos[0]*self.cell_size+self.cell_size//2, self.drone_pos[1]*self.cell_size+self.cell_size//2), self.cell_size//3, (255,0,0), -1)
+            cv2.circle(img, (self.drone_pos[0] * self.cell_size + self.cell_size // 2, 
+                            self.drone_pos[1] * self.cell_size + self.cell_size // 2), 
+                      self.cell_size // 3, (255, 0, 0), -1)
+        
         # Draw drone paths (history)
         for drone_id, path in self.drone_paths.items():
             if len(path) > 1:
                 for i in range(1, len(path)):
-                    x1, y1 = path[i-1]
+                    x1, y1 = path[i - 1]
                     x2, y2 = path[i]
-                    color = (0, 0, 255 - 50*drone_id)  # Different color for each drone
+                    color = (0, 0, 255 - 50 * drone_id)  # Different color for each drone
                     cv2.line(img,
-                        (x1*self.cell_size+self.cell_size//2, y1*self.cell_size+self.cell_size//2),
-                        (x2*self.cell_size+self.cell_size//2, y2*self.cell_size+self.cell_size//2),
-                        color, 2)
-        # Draw grid
-        for i in range(self.grid_size+1):
-            cv2.line(img, (0, i*self.cell_size), (self.grid_size*self.cell_size, i*self.cell_size), (200,200,200), 1)
-            cv2.line(img, (i*self.cell_size, 0), (i*self.cell_size, self.grid_size*self.cell_size), (200,200,200), 1)
-        # Draw tutorial/instructions overlay
+                            (x1 * self.cell_size + self.cell_size // 2, y1 * self.cell_size + self.cell_size // 2),
+                            (x2 * self.cell_size + self.cell_size // 2, y2 * self.cell_size + self.cell_size // 2),
+                            color, 2)
+        
+        # Draw simplified controls overlay
         overlay_lines = [
-            'Controls:',
-            'Left-click: Set Start (green)',
-            'Right-click: Add Dynamic Obstacle (blue)',
-            'Middle-click: Add Obstacle (black)',
-            'Drag corners: Resize Obstacle',
-            'Left-click+drag: Move Obstacle',
-            'Shift+Left-click: No-Fly Zone (red)',
-            'Drag yellow: Edit Path',
-            'Right-click on cell: Set End (red)',
-            'Enter: Start Simulation',
+            'CONTROLS:',
+            'MOUSE:',
+            'Left-click: Set START (green)',
+            'Right-click: Set END (red)',
+            'Middle-click: Toggle OBSTACLE (black)',
+            '',
+            'KEYBOARD:',
+            'S: Set START | E: Set END',
+            'O: Toggle OBSTACLE (black)',
+            'D: Toggle DYNAMIC OBSTACLE (blue)',
+            'N: Toggle NO-FLY ZONE (red)',
+            '',
+            'Press ENTER to start simulation'
         ]
+        
+        # Draw semi-transparent background for controls
+        overlay_bg = img.copy()
+        cv2.rectangle(overlay_bg, (5, 5), (350, 200), (240, 240, 240), -1)
+        img = cv2.addWeighted(img, 0.7, overlay_bg, 0.3, 0)
+        
+        # Draw control text
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.45
+        font_scale = 0.5
         thickness = 1
-        y0 = 18
+        y0 = 25
+        
         for i, line in enumerate(overlay_lines):
-            cv2.putText(img, line, (8, y0 + i*18), font, font_scale, (40,40,40), thickness, cv2.LINE_AA)
+            color = (0, 0, 0) if i == 0 else (50, 50, 50)  # Title in black, others in dark gray
+            cv2.putText(img, line, (10, y0 + i * 18), font, font_scale, color, thickness, cv2.LINE_AA)
+        
         cv2.imshow(self.window_name, img)
 
     def get_map(self):
@@ -199,14 +215,87 @@ class MapUI:
         self.drone_pos = pos
 
     def wait_for_setup(self):
-        print("\n[Map UI] Left-click: Set Start | Right-click: Set End | Middle-click: Add Obstacle | Drag corners to resize | Press Enter to confirm setup.")
+        print("\n" + "="*60)
+        print("INTERACTIVE MAP SETUP")
+        print("="*60)
+        print("MOUSE CONTROLS:")
+        print("  Left-click: Set START point (green)")
+        print("  Right-click: Set END point (red)")
+        print("  Middle-click: Toggle STATIC OBSTACLE (black)")
+        print("  Ctrl+Left-click: Toggle DYNAMIC OBSTACLE (blue)")
+        print("  Shift+Left-click: Toggle NO-FLY ZONE (red)")
+        print("")
+        print("KEYBOARD CONTROLS (if mouse doesn't work):")
+        print("  Press 'S': Set START point at mouse position")
+        print("  Press 'E': Set END point at mouse position")
+        print("  Press 'O': Toggle STATIC OBSTACLE at mouse position")
+        print("  Press 'D': Toggle DYNAMIC OBSTACLE at mouse position")
+        print("  Press 'N': Toggle NO-FLY ZONE at mouse position")
+        print("  Press ENTER: Start simulation")
+        print("="*60)
+        print("Please set START and END points, then press ENTER to begin...")
+        
+        # Store last mouse position for keyboard controls
+        self.last_mouse_pos = (0, 0)
+        
         while True:
             self.draw()
-            key = cv2.waitKey(50)
+            key = cv2.waitKey(50) & 0xFF
+            
             if key == 13:  # Enter
                 if self.start and self.end:
+                    print(f"\n[SETUP COMPLETE]")
+                    print(f"  Start: {self.start}")
+                    print(f"  End: {self.end}")
+                    print(f"  Static Obstacles: {len(self.obstacles)}")
+                    print(f"  Dynamic Obstacles: {len(self.dynamic_obstacles)}")
+                    print(f"  No-Fly Zones: {len(self.nofly_zones)}")
+                    print("="*60)
                     break
-        print(f"[Map UI] Start: {self.start}, End: {self.end}, Obstacles: {len(self.obstacles)}")
+                else:
+                    print("[WARNING] Please set both START and END points before pressing ENTER!")
+            
+            # Keyboard controls
+            elif key == ord('s') or key == ord('S'):
+                gx, gy = self.last_mouse_pos
+                self.start = (gx, gy)
+                print(f"[MAP] Start point set at ({gx}, {gy})")
+            
+            elif key == ord('e') or key == ord('E'):
+                gx, gy = self.last_mouse_pos
+                self.end = (gx, gy)
+                print(f"[MAP] End point set at ({gx}, {gy})")
+            
+            elif key == ord('o') or key == ord('O'):
+                gx, gy = self.last_mouse_pos
+                if (gx, gy) in self.obstacles:
+                    self.obstacles.remove((gx, gy))
+                    self.map[gy, gx] = 255
+                    print(f"[MAP] Static obstacle removed at ({gx}, {gy})")
+                else:
+                    self.obstacles.add((gx, gy))
+                    self.map[gy, gx] = 0
+                    self.obstacle_sizes[(gx, gy)] = (1, 1)
+                    print(f"[MAP] Static obstacle added at ({gx}, {gy})")
+            
+            elif key == ord('d') or key == ord('D'):
+                gx, gy = self.last_mouse_pos
+                if (gx, gy) in self.dynamic_obstacles:
+                    self.dynamic_obstacles.remove((gx, gy))
+                    print(f"[MAP] Dynamic obstacle removed at ({gx}, {gy})")
+                else:
+                    self.dynamic_obstacles.add((gx, gy))
+                    print(f"[MAP] Dynamic obstacle added at ({gx}, {gy})")
+            
+            elif key == ord('n') or key == ord('N'):
+                gx, gy = self.last_mouse_pos
+                if (gx, gy) in self.nofly_zones:
+                    self.nofly_zones.remove((gx, gy))
+                    print(f"[MAP] No-fly zone removed at ({gx}, {gy})")
+                else:
+                    self.nofly_zones.add((gx, gy))
+                    print(f"[MAP] No-fly zone added at ({gx}, {gy})")
+        
         result = self.get_map()
         self.locked = True  # Lock editing after setup
         return result

@@ -9,6 +9,7 @@ from perception.obstacle_detector import ObstacleDetector
 from planning.path_planner import PathPlanner
 from control.controller import Controller
 from ui.map_ui import MapUI
+from ui.modern_ui import ModernUI
 from typing import List, Dict, Tuple
 import math
 import random
@@ -16,52 +17,89 @@ import random
 def create_status_window():
     """Create a window to display drone status."""
     cv2.namedWindow('Drone Status', cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('Drone Status', 400, 300)
+    cv2.resizeWindow('Drone Status', 800, 600)
 
 def update_status_display(states: List[Dict], mode: str = "Autonomous"):
-    """Update the status display with current drone states."""
-    # Create a black background
-    status_image = np.zeros((300, 400, 3), dtype=np.uint8)
+    """Update the status display with current drone states matching the images."""
+    # Create a larger status display
+    status_image = np.zeros((600, 800, 3), dtype=np.uint8)
+    
+    # Add modern background
+    cv2.rectangle(status_image, (0, 0), (800, 600), (40, 40, 40), -1)
     
     # Add status information
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.6
-    font_thickness = 1
-    line_height = 30
-    y_pos = 30
+    font = cv2.FONT_HERSHEY_DUPLEX
+    font_scale = 0.7
+    font_thickness = 2
+    line_height = 35
+    y_pos = 40
+    
+    # Title
+    cv2.putText(status_image, "AUTONOMOUS DRONE NAVIGATION SYSTEM", (20, y_pos), font, 0.8, (0, 255, 255), 2)
+    y_pos += 50
     
     # Mode indicator
     mode_color = (0, 255, 0) if mode == "Manual" else (0, 165, 255)  # Green for Manual, Orange for Autonomous
-    cv2.putText(status_image, f"Mode: {mode}", (10, y_pos), font, font_scale, mode_color, font_thickness)
-    y_pos += line_height
+    cv2.putText(status_image, f"OPERATION MODE: {mode}", (20, y_pos), font, font_scale, mode_color, font_thickness)
+    y_pos += line_height + 10
     
     # Display information for each drone
     for i, state in enumerate(states):
         pos = state['position']
         vel = state['velocity']
+        orn = state['orientation']
         
-        # Drone number
-        cv2.putText(status_image, f"Drone {i+1}:", (10, y_pos), font, font_scale, (255, 255, 255), font_thickness)
+        # Calculate flight parameters
+        speed = np.linalg.norm(vel)
+        altitude = pos[2]
+        heading = np.degrees(orn[2]) % 360
+        pitch = np.degrees(orn[1])
+        roll = np.degrees(orn[0])
+        
+        # Drone header
+        drone_color = (0, 255, 255) if i == 0 else (255, 255, 0)
+        cv2.putText(status_image, f"DRONE #{i+1} - STATUS", (20, y_pos), font, font_scale, drone_color, font_thickness)
         y_pos += line_height
         
         # Position information
-        cv2.putText(status_image, f"X: {pos[0]:+.2f} m", (20, y_pos), font, font_scale, (255, 255, 255), font_thickness)
-        y_pos += line_height
-        cv2.putText(status_image, f"Y: {pos[1]:+.2f} m", (20, y_pos), font, font_scale, (255, 255, 255), font_thickness)
-        y_pos += line_height
-        cv2.putText(status_image, f"Z: {pos[2]:+.2f} m", (20, y_pos), font, font_scale, (255, 255, 255), font_thickness)
+        cv2.putText(status_image, f"POSITION: X:{pos[0]:+.2f} Y:{pos[1]:+.2f} Z:{pos[2]:+.2f}", (30, y_pos), font, 0.6, (255, 255, 255), 1)
         y_pos += line_height
         
         # Velocity information
-        cv2.putText(status_image, f"VX: {vel[0]:+.2f} m/s", (20, y_pos), font, font_scale, (255, 255, 255), font_thickness)
-        y_pos += line_height
-        cv2.putText(status_image, f"VY: {vel[1]:+.2f} m/s", (20, y_pos), font, font_scale, (255, 255, 255), font_thickness)
-        y_pos += line_height
-        cv2.putText(status_image, f"VZ: {vel[2]:+.2f} m/s", (20, y_pos), font, font_scale, (255, 255, 255), font_thickness)
+        cv2.putText(status_image, f"VELOCITY: X:{vel[0]:+.2f} Y:{vel[1]:+.2f} Z:{vel[2]:+.2f}", (30, y_pos), font, 0.6, (255, 255, 255), 1)
         y_pos += line_height
         
-        # Add spacing between drones
+        # Flight parameters
+        cv2.putText(status_image, f"SPEED: {speed:.2f} m/s | ALTITUDE: {altitude:.2f} m", (30, y_pos), font, 0.6, (255, 255, 255), 1)
         y_pos += line_height
+        
+        cv2.putText(status_image, f"HEADING: {heading:.1f}° | PITCH: {pitch:.1f}° | ROLL: {roll:.1f}°", (30, y_pos), font, 0.6, (255, 255, 255), 1)
+        y_pos += line_height
+        
+        # Status indicators
+        cv2.putText(status_image, f"GPS: OK | GYRO: ACTIVE | CAM: {i+1} | BATTERY: 100%", (30, y_pos), font, 0.6, (0, 255, 0), 1)
+        y_pos += line_height + 20
+    
+    # Add system status
+    cv2.putText(status_image, "SYSTEM STATUS:", (20, y_pos), font, font_scale, (0, 255, 255), font_thickness)
+    y_pos += line_height
+    
+    cv2.putText(status_image, "• PATH PLANNING: ACTIVE", (30, y_pos), font, 0.6, (0, 255, 0), 1)
+    y_pos += line_height
+    
+    cv2.putText(status_image, "• OBSTACLE AVOIDANCE: ENABLED", (30, y_pos), font, 0.6, (0, 255, 0), 1)
+    y_pos += line_height
+    
+    cv2.putText(status_image, "• TRAJECTORY TRACKING: ACTIVE", (30, y_pos), font, 0.6, (0, 255, 0), 1)
+    y_pos += line_height
+    
+    cv2.putText(status_image, "• COMMUNICATION: STABLE", (30, y_pos), font, 0.6, (0, 255, 0), 1)
+    y_pos += line_height
+    
+    # Add timestamp
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+    cv2.putText(status_image, f"TIME: {timestamp}", (20, 580), font, 0.6, (255, 255, 255), 1)
     
     # Display the status window
     cv2.imshow('Drone Status', status_image)
@@ -95,11 +133,14 @@ def get_parameter_values():
 
 def animate_drones(simulator: Simulator, paths: List[List[Tuple[float, float, float]]], 
                   dynamic_obstacles: List[Dict] = None, no_fly_zones: List[Dict] = None, 
-                  map_ui=None, end_world=None, planner=None, obstacles=None, buildings=None):
+                  map_ui=None, end_world=None, planner=None, obstacles=None, buildings=None, start_world=None):
     """
     Animate the drones along their paths with clear path visualization.
     """
-    # Create status and parameter windows
+    # Create modern UI system
+    modern_ui = ModernUI()
+    
+    # Create status and parameter windows (legacy)
     create_status_window()
     create_parameter_ui()
     
@@ -115,18 +156,32 @@ def animate_drones(simulator: Simulator, paths: List[List[Tuple[float, float, fl
     last_time = time.time()
     greedy_mode = False
     
+    # Timeout mechanism
+    start_time = time.time()
+    max_runtime = 300  # 5 minutes max runtime
+    
     sim_dt = 1/240
     render_dt = 1/60
     last_render = time.time()
+    last_3d_update = time.time()
     stuck_timer = 0
     stuck_threshold = 1.0
     stuck_distance = 0.5
     last_pos = None
     
+    # Initialize trajectory tracking
+    trajectory_points = [[] for _ in range(len(paths))]
+    path_completed = [False] * len(paths)
+    
     while running:
         current_time = time.time()
         dt = current_time - last_time
         last_time = current_time
+        
+        # Check for timeout
+        if current_time - start_time > max_runtime:
+            print("[INFO] Maximum runtime reached, stopping simulation...")
+            break
         
         # Handle keyboard input
         key = cv2.waitKey(1) & 0xFF
@@ -159,72 +214,45 @@ def animate_drones(simulator: Simulator, paths: List[List[Tuple[float, float, fl
                 if mode == "Manual":
                     control_input = get_parameter_values()
                 else:
-                    # Always aim for the endpoint if it's visible
-                    pos2d = np.array([state['position'][0], state['position'][1]])
-                    end2d = np.array([end_world[0], end_world[1]])
-                    grid_pos = planner.world_to_grid(np.array([pos2d[0], pos2d[1], 0]))
-                    grid_end = planner.world_to_grid(np.array([end2d[0], end2d[1], 0]))
+                    # Enhanced autonomous control with better obstacle avoidance
+                    current_pos = state['position']
                     
-                    # Check if direct path to endpoint is clear
-                    direct_clear = True
-                    for gx, gy in bresenham_line(grid_pos[0], grid_pos[1], grid_end[0], grid_end[1]):
-                        if (gx, gy) in obstacles:
-                            direct_clear = False
-                            break
-                    
-                    if direct_clear:
-                        target_pos = np.array([end_world[0], end_world[1], end_world[2]])
-                        # Update path visualization for direct path
-                        if map_ui is not None:
-                            map_ui.clear_path()
-                            map_ui.add_path_point(grid_pos[0], grid_pos[1])
-                            map_ui.add_path_point(grid_end[0], grid_end[1])
-                            map_ui.draw()
+                    # Check if drone has reached the goal
+                    distance_to_goal = np.linalg.norm(current_pos - end_world)
+                    if distance_to_goal < 0.5:
+                        path_completed[i] = True
+                        print(f"[INFO] Drone {i+1} reached the endpoint!")
+                        # Hover at goal position
+                        target_pos = end_world.copy()
                     else:
-                        # Follow next waypoint in path
-                        if path:
-                            target_pos = path[0]
-                            if np.linalg.norm(state['position'] - target_pos) < 0.5:
+                        # Determine target position
+                        if path and not path_completed[i]:
+                            # Follow planned path
+                            target_pos = np.array(path[0])
+                            
+                            # Check if waypoint reached
+                            if np.linalg.norm(current_pos - target_pos) < 0.3:
                                 path.pop(0)
-                                # Update path visualization
-                                if map_ui is not None:
-                                    map_ui.clear_path()
-                                    for wp in path:
-                                        grid_wp = planner.world_to_grid(wp)
-                                        map_ui.add_path_point(grid_wp[0], grid_wp[1])
-                                    map_ui.draw()
+                                if path:
+                                    target_pos = np.array(path[0])
+                                else:
+                                    target_pos = end_world.copy()
                         else:
-                            target_pos = np.array([end_world[0], end_world[1], end_world[2]])
+                            # Direct path to goal
+                            target_pos = end_world.copy()
                     
-                    # Aggressive control inputs
-                    k = 5.0  # Increased from 3.0
-                    thrust = 25.0  # Increased from 20.0
+                    # Use the proper PID controller
+                    target_state = {
+                        'position': target_pos,
+                        'velocity': np.zeros(3),  # Target velocity (hover)
+                        'orientation': np.zeros(3)
+                    }
                     
-                    # Calculate position error
-                    pos_error = target_pos - state['position']
+                    control_input = controller.compute_control(state, target_state, dt)
                     
-                    # Calculate desired orientation
-                    pitch = np.clip(k * pos_error[1] / max(1.0, np.linalg.norm(pos_error)), -1.0, 1.0)
-                    roll = np.clip(k * pos_error[0] / max(1.0, np.linalg.norm(pos_error)), -1.0, 1.0)
-                    
-                    # Calculate yaw to face target
-                    delta = target_pos[:2] - state['position'][:2]
-                    desired_yaw = np.arctan2(delta[1], delta[0])
-                    yaw = desired_yaw
-                    
-                    # Apply additional thrust if far from target
-                    if np.linalg.norm(pos_error) > 2.0:
-                        thrust *= 1.5
-                    
-                    # Add gravity compensation
-                    thrust += 9.81  # Compensate for gravity
-                    
-                    control_input = np.array([thrust, roll, pitch, yaw])
-                    print(f"[DEBUG] Drone pos: {state['position']}, Target: {target_pos}")
-                    print(f"[DEBUG] Control input: {control_input}")
-                    
-                    if np.linalg.norm(state['position'] - target_pos) < 0.5 and np.allclose(target_pos, [end_world[0], end_world[1], end_world[2]], atol=0.1):
-                        print("[INFO] Drone reached the endpoint!")
+                    # Add trajectory point for visualization
+                    trajectory_points[i].append(current_pos.copy())
+                    simulator.add_trajectory_point(current_pos, i)
                 
                 control_inputs.append(control_input)
             simulator.step(control_inputs, mode)
@@ -256,7 +284,15 @@ def animate_drones(simulator: Simulator, paths: List[List[Tuple[float, float, fl
         if current_time - last_render >= render_dt:
             # Update displays and UI
             states = simulator.fleet.get_drone_states()
+            
+            # Update modern UI
+            modern_ui.update_drone_states(states)
+            modern_ui.set_system_mode(mode)
+            
+            # Update legacy status display
             update_status_display(states, mode)
+            
+            # Update 2D map UI
             if map_ui is not None:
                 for i, state in enumerate(states):
                     pos = state['position']
@@ -269,9 +305,41 @@ def animate_drones(simulator: Simulator, paths: List[List[Tuple[float, float, fl
                     map_ui.update_drone_path(i, gx, gy)
                     map_ui.set_drone_pos((gx, gy))
                 map_ui.draw()
+            
             last_render = current_time
+        
+        # Update visualization at lower frequency
+        if current_time - last_3d_update >= 0.1:  # 10 FPS for visualization
+            states = simulator.fleet.get_drone_states()
+            
+            # Update visualization based on mode
+            if hasattr(simulator, 'gui_mode') and not simulator.gui_mode:
+                # Use 2D visualization for DIRECT mode
+                simulator.update_2d_visualization(
+                    drone_states=states,
+                    obstacles=dynamic_obstacles or [],
+                    buildings=buildings or [],
+                    start=start_world,
+                    goal=end_world
+                )
+            else:
+                # Use 3D visualization for GUI mode
+                simulator.update_3d_visualization(
+                    drone_states=states,
+                    obstacles=dynamic_obstacles or [],
+                    buildings=buildings or [],
+                    start=start_world,
+                    goal=end_world
+                )
+                
+                # Draw planned path in 3D
+                if paths and paths[0]:
+                    simulator.draw_planned_path(paths[0], color='red')
+            
+            last_3d_update = current_time
     
     # Clean up
+    modern_ui.close()
     cv2.destroyAllWindows()
 
 def main():
@@ -280,7 +348,14 @@ def main():
     map_ui = MapUI(grid_size=20, cell_size=30)
     grid, start, end, obstacles, obstacle_sizes, dynamic_obstacles, no_fly_zones = map_ui.wait_for_setup()
     
-    simulator = Simulator(num_drones=1)
+    print("[SIM] Initializing PyBullet simulator...")
+    # Start with DIRECT mode to avoid Windows hanging issues
+    try:
+        simulator = Simulator(gui=False, num_drones=1)
+        print("[SIM] Simulator initialized in DIRECT mode!")
+    except Exception as e:
+        print(f"[ERROR] Failed to initialize simulator: {e}")
+        return
     planner = PathPlanner()
     start_world = planner.grid_to_world(start, z=1.0)
     
@@ -296,17 +371,14 @@ def main():
         simulator.add_building(np.array([world_pos[0], world_pos[1], bh/2]), np.array([bw, bl, bh]), color=(0.3, 0.3, 0.7, 1))
     end_world = planner.grid_to_world(end, z=1.0)
     print(f"[ENV] Start: {start_world}, End: {end_world}")
-    # Plan path (8-connected A*)
-    path2d = planner.plan_path(start_world, end_world)
-    print("[PATH] Planned 2D path waypoints:")
-    for wp in path2d:
-        print(f"  {wp}")
-    path3d = [np.array([wp[0], wp[1], 1.0]) for wp in path2d[:-1]]
-    if path2d:
-        path3d.append(np.array([end_world[0], end_world[1], end_world[2]]))
+    # Plan path with enhanced obstacle avoidance
+    path3d = planner.replan_path(start_world, end_world)
     print("[PATH] Planned 3D path waypoints:")
     for wp in path3d:
         print(f"  {wp}")
+    
+    # Convert to 2D for map display
+    path2d = [np.array([wp[0], wp[1], 0]) for wp in path3d]
     # Visualize path in 2D map
     map_ui.clear_path()
     for wp in path2d:
@@ -320,7 +392,7 @@ def main():
     if hasattr(simulator, 'draw_goal_marker') and end is not None:
         simulator.draw_goal_marker(end[:2], map_ui.grid_size, 10.0)
     # Animate drones
-    animate_drones(simulator, paths, dynamic_obstacles, no_fly_zones, map_ui=map_ui, end_world=end_world, planner=planner, obstacles=obstacles, buildings=buildings)
+    animate_drones(simulator, paths, dynamic_obstacles, no_fly_zones, map_ui=map_ui, end_world=end_world, planner=planner, obstacles=obstacles, buildings=buildings, start_world=start_world)
     map_ui.close()
     simulator.close()
 

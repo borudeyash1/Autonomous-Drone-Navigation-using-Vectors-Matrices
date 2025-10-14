@@ -79,7 +79,7 @@ class PathPlanner:
     
     def plan_path(self, start: np.ndarray, end: np.ndarray) -> List[np.ndarray]:
         """
-        Plan a path from start to end using A* algorithm.
+        Plan a path from start to end using A* algorithm with enhanced obstacle avoidance.
         
         Args:
             start: Start position in world coordinates
@@ -132,7 +132,16 @@ class PathPlanner:
                 if not self.is_valid_position(neighbor) or neighbor in visited:
                     continue
                 
-                tentative_g = g_score[current] + 1
+                # Calculate cost with obstacle avoidance
+                base_cost = 1.0
+                if abs(dx) + abs(dy) == 2:  # Diagonal movement
+                    base_cost = 1.414  # sqrt(2)
+                
+                # Add penalty for being near obstacles
+                obstacle_penalty = self._calculate_obstacle_penalty(neighbor)
+                cost = base_cost + obstacle_penalty
+                
+                tentative_g = g_score[current] + cost
                 
                 if neighbor not in g_score or tentative_g < g_score[neighbor]:
                     prev[neighbor] = current
@@ -141,6 +150,18 @@ class PathPlanner:
                     pq.put((f_score[neighbor], neighbor))
         
         return []
+    
+    def _calculate_obstacle_penalty(self, pos: Tuple[int, int]) -> float:
+        """Calculate penalty for being near obstacles."""
+        penalty = 0.0
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
+                neighbor = (pos[0] + dx, pos[1] + dy)
+                if neighbor in self.obstacles:
+                    distance = np.sqrt(dx*dx + dy*dy)
+                    if distance > 0:
+                        penalty += 0.5 / distance  # Inverse distance penalty
+        return penalty
     
     def heuristic(self, a: Tuple[int, int], b: Tuple[int, int]) -> float:
         """
@@ -180,9 +201,11 @@ class PathPlanner:
             self.no_fly_zones.add(grid_pos)
     
     def path_smooth(self, path: List[np.ndarray]) -> List[np.ndarray]:
-        """Remove unnecessary waypoints (collinear points) from the path."""
+        """Remove unnecessary waypoints and smooth the path for better navigation."""
         if len(path) <= 2:
             return path
+        
+        # First pass: Remove collinear points
         smoothed = [path[0]]
         for i in range(1, len(path)-1):
             prev = smoothed[-1]
@@ -192,11 +215,88 @@ class PathPlanner:
             v2 = next - curr
             v1 = v1 / (np.linalg.norm(v1) + 1e-8)
             v2 = v2 / (np.linalg.norm(v2) + 1e-8)
-            # If direction changes, keep the waypoint
-            if not np.allclose(v1, v2, atol=1e-2):
+            # If direction changes significantly, keep the waypoint
+            if not np.allclose(v1, v2, atol=0.1):
                 smoothed.append(curr)
         smoothed.append(path[-1])
-        return smoothed 
+        
+        # Second pass: Add intermediate waypoints for smoother navigation
+        if len(smoothed) >= 2:
+            final_path = [smoothed[0]]
+            for i in range(len(smoothed) - 1):
+                current = smoothed[i]
+                next = smoothed[i + 1]
+                distance = np.linalg.norm(next - current)
+                
+                # Add intermediate waypoints if distance is too large
+                if distance > 2.0:
+                    num_intermediate = int(distance / 1.5)
+                    for j in range(1, num_intermediate + 1):
+                        t = j / (num_intermediate + 1)
+                        intermediate = current + t * (next - current)
+                        final_path.append(intermediate)
+                
+                final_path.append(next)
+            return final_path
+        
+        return smoothed
+    
+    def check_path_safety(self, path: List[np.ndarray]) -> bool:
+        """Check if the path is safe from obstacles."""
+        for i in range(len(path) - 1):
+            start = path[i]
+            end = path[i + 1]
+            
+            # Check line segment for obstacles
+            num_checks = 10
+            for j in range(num_checks + 1):
+                t = j / num_checks
+                check_pos = start + t * (end - start)
+                grid_pos = self.world_to_grid(check_pos)
+                
+                if not self.is_valid_position(grid_pos):
+                    return False
+        return True
+    
+    def replan_path(self, start: np.ndarray, end: np.ndarray, current_path: List[np.ndarray] = None) -> List[np.ndarray]:
+        """Replan path with enhanced obstacle avoidance."""
+        # Try direct path first
+        direct_path = [start, end]
+        if self.check_path_safety(direct_path):
+            return self.path_smooth(direct_path)
+        
+        # Use A* if direct path is not safe
+        planned_path = self.plan_path(start, end)
+        if planned_path and self.check_path_safety(planned_path):
+            return planned_path
+        
+        # If A* fails, try with relaxed constraints
+        return self.plan_path_with_relaxed_constraints(start, end)
+    
+    def plan_path_with_relaxed_constraints(self, start: np.ndarray, end: np.ndarray) -> List[np.ndarray]:
+        """Plan path with relaxed obstacle constraints for emergency navigation."""
+        # Convert to grid coordinates
+        start_grid = self.world_to_grid(start)
+        end_grid = self.world_to_grid(end)
+        
+        # Use larger search radius
+        search_radius = 3
+        directions = []
+        for dx in range(-search_radius, search_radius + 1):
+            for dy in range(-search_radius, search_radius + 1):
+                if dx != 0 or dy != 0:
+                    directions.append((dx, dy))
+        
+        # Simple path: go up, over, then down
+        mid_height = max(start[2], end[2]) + 2.0
+        path = [
+            start,
+            np.array([start[0], start[1], mid_height]),
+            np.array([end[0], end[1], mid_height]),
+            end
+        ]
+        
+        return path 
 
     def world_to_grid_3d(self, pos: np.ndarray) -> Tuple[int, int, int]:
         x = int(round((pos[0] + self.world_size/2) / (self.world_size / (self.grid_size-1))))

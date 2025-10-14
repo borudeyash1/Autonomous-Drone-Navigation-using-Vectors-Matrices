@@ -1,0 +1,14 @@
+{
+  "start_pos": [
+    -3.0,
+    -2.0,
+    1.0
+  ],
+  "end_pos": [
+    3.0,
+    2.0,
+    2.0
+  ],
+  "drone_shape": "sphere",
+  "obstacles": []
+}

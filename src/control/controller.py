@@ -27,7 +27,7 @@ class Controller:
     
     def compute_control(self, current_state: Dict, target_state: Dict, dt: float) -> np.ndarray:
         """
-        Compute control input using PID control.
+        Compute control input using enhanced PID control for proper drone movement.
         
         Args:
             current_state: Current state of the drone
@@ -39,35 +39,68 @@ class Controller:
         """
         # Position error
         pos_error = target_state['position'] - current_state['position']
+        error_magnitude = np.linalg.norm(pos_error)
         
-        # Velocity error
-        vel_error = target_state.get('velocity', np.zeros(3)) - current_state['velocity']
+        # Adaptive gains based on error magnitude
+        if error_magnitude > 3.0:
+            kp = 8.0
+            kd = 3.0
+        elif error_magnitude > 1.0:
+            kp = 5.0
+            kd = 2.0
+        else:
+            kp = 3.0
+            kd = 1.0
         
-        # Update integral term
+        # Update integral term with anti-windup
         self.integral += pos_error * dt
+        self.integral = np.clip(self.integral, -2.0, 2.0)  # Anti-windup
         
         # Compute derivative term
-        derivative = (pos_error - self.prev_error) / dt
+        if dt > 0:
+            derivative = (pos_error - self.prev_error) / dt
+        else:
+            derivative = np.zeros(3)
         
         # Compute control output
         control = (
-            self.kp * pos_error +  # Proportional term
+            kp * pos_error +  # Proportional term
             self.ki * self.integral +  # Integral term
-            self.kd * derivative  # Derivative term
+            kd * derivative  # Derivative term
         )
         
         # Update previous error
         self.prev_error = pos_error
         
-        # Convert to thrust and torques
-        thrust = np.clip(control[2] + 9.81, 0, self.max_thrust)  # Add gravity compensation
-        roll_torque = np.clip(control[0], -self.max_torque, self.max_torque)
-        pitch_torque = np.clip(control[1], -self.max_torque, self.max_torque)
+        # Convert to thrust and orientation
+        # Base thrust to hover
+        base_thrust = 9.81  # Gravity compensation
         
-        # Yaw control (optional)
-        yaw_torque = 0.0
+        # Add vertical control
+        thrust = base_thrust + np.clip(control[2], -5.0, 10.0)
+        thrust = np.clip(thrust, 5.0, 25.0)  # Reasonable thrust limits
         
-        return np.array([thrust, roll_torque, pitch_torque, yaw_torque])
+        # Convert horizontal forces to roll/pitch
+        roll = np.clip(-control[1] / max(thrust, 1.0), -0.3, 0.3)
+        pitch = np.clip(control[0] / max(thrust, 1.0), -0.3, 0.3)
+        
+        # Yaw control to face target
+        if error_magnitude > 0.1:
+            target_direction = np.arctan2(pos_error[1], pos_error[0])
+            current_yaw = current_state['orientation'][2]
+            yaw_error = target_direction - current_yaw
+            
+            # Normalize yaw error to [-π, π]
+            while yaw_error > np.pi:
+                yaw_error -= 2 * np.pi
+            while yaw_error < -np.pi:
+                yaw_error += 2 * np.pi
+            
+            yaw = np.clip(yaw_error * 2.0, -0.5, 0.5)
+        else:
+            yaw = 0.0
+        
+        return np.array([thrust, roll, pitch, yaw])
     
     def reset(self):
         """Reset the controller state."""

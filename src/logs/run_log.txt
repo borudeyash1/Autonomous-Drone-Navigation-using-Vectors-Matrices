@@ -1,0 +1,2 @@
+[15-10-2025  3:10:29.29] - 3D_SETUP_UI - STARTED - Environment configuration tool 
+[15-10-2025  3:10:29.35] - 3D_SETUP_UI - COMPLETED - Setup tool finished 
